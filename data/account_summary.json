@@ -1,0 +1,36 @@
+{
+  "account_id": "ACC-00441",
+  "company_name": "Contoso Ltd",
+  "tier": "Enterprise",
+  "contract_value_usd_annual": 480000,
+  "renewal_date": "2026-12-01",
+  "renewal_risk": "HIGH",
+  "csm": "Laura Callahan",
+  "technical_account_manager": "Robert King",
+  "health_score": 42,
+  "health_trend": "declining",
+  "account_notes": "Contoso is up for renewal in December. They were already unhappy with the Q1 API rate limit changes. A second major incident could jeopardize the renewal. Executive sponsor is VP of Procurement, Derek Hartley.",
+  "support_history_90d": {
+    "total_tickets": 14,
+    "urgent_tickets": 3,
+    "average_resolution_hours": 18.4,
+    "sla_breaches": 2
+  },
+  "current_incident": {
+    "incident_id": "INC-2026-0812",
+    "zendesk_ticket": "ZD-98741",
+    "reported_by_customer": "2026-08-12T14:07:33Z",
+    "orders_flagged_as_stuck": 23,
+    "estimated_revenue_at_risk_usd": 200000,
+    "executive_escalation": true,
+    "executive_contacted": "Derek Hartley (VP Procurement)",
+    "last_executive_update": "2026-08-13T10:00:00Z"
+  },
+  "nps_score": 6,
+  "last_qbr_date": "2026-06-15",
+  "products_in_use": ["Order Management API", "Inventory Sync", "Reporting Dashboard"],
+  "open_feature_requests": [
+    {"id": "FR-2201", "title": "Bulk order status export", "priority": "high"},
+    {"id": "FR-2089", "title": "Webhook for order state changes", "priority": "medium"}
+  ]
+}

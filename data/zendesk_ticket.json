@@ -1,0 +1,41 @@
+{
+  "ticket_id": "ZD-98741",
+  "created_at": "2026-08-12T14:07:33Z",
+  "updated_at": "2026-08-19T09:22:11Z",
+  "status": "open",
+  "priority": "urgent",
+  "requester": {
+    "name": "Margaret Peacock",
+    "email": "m.peacock@contoso-ltd.com",
+    "organization": "Contoso Ltd"
+  },
+  "assignee": "Laura Callahan",
+  "subject": "Order processing completely broken - urgent escalation needed",
+  "description": "Our entire procurement team has been unable to place or track orders since Tuesday Aug 12 at approximately 2:00 PM EST. We are seeing API timeout errors on every order submission. As of today, 47 orders are stuck in 'Processing' state with no movement. This is critically impacting our supply chain. We have a $200K shipment that needed to go out Friday.",
+  "tags": ["escalation", "order-processing", "api-timeout", "enterprise"],
+  "sla_breach": true,
+  "first_response_time_hours": 4.5,
+  "csat_score": null,
+  "comments": [
+    {
+      "author": "Laura Callahan",
+      "timestamp": "2026-08-12T18:30:00Z",
+      "body": "I've escalated this to engineering. They are investigating the order processing pipeline. We believe this is related to a recent infrastructure change."
+    },
+    {
+      "author": "Margaret Peacock",
+      "timestamp": "2026-08-13T08:15:00Z",
+      "body": "Still not working this morning. My VP is now involved. We need an RCA and timeline for resolution TODAY."
+    },
+    {
+      "author": "Laura Callahan",
+      "timestamp": "2026-08-14T11:00:00Z",
+      "body": "Engineering says the root issue was a database migration that ran Wednesday night. A fix is being deployed."
+    },
+    {
+      "author": "Margaret Peacock",
+      "timestamp": "2026-08-19T09:22:11Z",
+      "body": "We are still seeing intermittent failures on order #ORD-55892 and #ORD-55901. This is NOT resolved."
+    }
+  ]
+}

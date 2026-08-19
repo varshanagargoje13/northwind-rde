@@ -1,0 +1,73 @@
+{
+  "project": "NWAPI",
+  "sprint": "Sprint 47 (Aug 4 - Aug 17, 2026)",
+  "tickets": [
+    {
+      "id": "NWAPI-3341",
+      "type": "Bug",
+      "priority": "Critical",
+      "status": "In Review",
+      "title": "Connection pool exhaustion under moderate load",
+      "reporter": "Nancy Davolio",
+      "assignee": "Steven Buchanan",
+      "created": "2026-08-12T15:30:00Z",
+      "updated": "2026-08-18T14:00:00Z",
+      "description": "DB connection pool hits max (200) under load scenarios that previously were handled fine. Connections are not being released after order queries complete. Suspected leak in the new API gateway connection handling introduced in v2.4.1.",
+      "root_cause_hypothesis": "API gateway v2.4.1 connection leak",
+      "estimated_orders_impacted": "60+",
+      "fix_description": "Added connection release in finally block for all order query handlers. Pool size temporarily increased to 350.",
+      "fix_deployed": "2026-08-14T16:00:00Z",
+      "linked_issues": ["NWAPI-3298", "NWAPI-3350"]
+    },
+    {
+      "id": "NWAPI-3350",
+      "type": "Bug",
+      "priority": "Critical",
+      "status": "Done",
+      "title": "DB migration script caused invalid index on orders.status_idx",
+      "reporter": "Andrew Fuller",
+      "assignee": "Nancy Davolio",
+      "created": "2026-08-13T09:30:00Z",
+      "updated": "2026-08-14T17:00:00Z",
+      "description": "Migration script migrate_orders_v12.sql triggered an unexpected REINDEX CONCURRENTLY. Partial failure left status_idx in INVALID state. Caused full table scans on all order status queries, spiking latency to 8000ms+.",
+      "root_cause_hypothesis": "DB migration script with unvalidated REINDEX operation",
+      "estimated_orders_impacted": "23",
+      "fix_description": "Manually rebuilt index. Added index validation to migration checklist.",
+      "fix_deployed": "2026-08-14T14:30:00Z",
+      "linked_issues": ["NWAPI-3341"]
+    },
+    {
+      "id": "NWAPI-3298",
+      "type": "Task",
+      "priority": "Medium",
+      "status": "Done",
+      "title": "API Gateway upgrade to v2.4.1",
+      "reporter": "Janet Leverling",
+      "assignee": "Steven Buchanan",
+      "created": "2026-08-08T10:00:00Z",
+      "updated": "2026-08-11T18:00:00Z",
+      "description": "Upgrade API gateway from v2.3.9 to v2.4.1 for TLS 1.3 support and improved request routing.",
+      "deployed_at": "2026-08-11T17:28:00Z",
+      "canary_percentage": 10,
+      "canary_result": "Passed",
+      "linked_issues": ["NWAPI-3341"]
+    },
+    {
+      "id": "NWAPI-3362",
+      "type": "Bug",
+      "priority": "High",
+      "status": "Open",
+      "title": "Specific orders stuck in PROCESSING state after incident recovery",
+      "reporter": "Robert King",
+      "assignee": "Unassigned",
+      "created": "2026-08-19T08:45:00Z",
+      "updated": "2026-08-19T08:45:00Z",
+      "description": "Contoso Ltd reporting orders ORD-55892 and ORD-55901 still stuck in PROCESSING state despite incident being marked resolved. Appears cleanup job did not run for all affected orders.",
+      "orders_affected": ["ORD-55892", "ORD-55901"],
+      "estimated_orders_impacted": "unknown — cleanup needed",
+      "fix_description": null,
+      "fix_deployed": null,
+      "linked_issues": ["NWAPI-3341", "NWAPI-3350"]
+    }
+  ]
+}

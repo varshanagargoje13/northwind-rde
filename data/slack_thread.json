@@ -1,0 +1,67 @@
+{
+  "channel": "#incident-order-processing",
+  "incident_id": "INC-2026-0812",
+  "thread_ts": "1723420800.000100",
+  "messages": [
+    {
+      "user": "andrew.fuller",
+      "timestamp": "2026-08-11T18:04:22Z",
+      "text": "Hey team — we first noticed elevated error rates in order-service around 6pm Monday. Not alarming yet but worth watching. Error rate went from 0.2% to 1.8%."
+    },
+    {
+      "user": "janet.leverling",
+      "timestamp": "2026-08-11T18:47:55Z",
+      "text": "I see it too. Could be the new API gateway rollout we did this afternoon? @steven.buchanan did that go out around 5:30?"
+    },
+    {
+      "user": "steven.buchanan",
+      "timestamp": "2026-08-11T19:02:10Z",
+      "text": "Yes, API gateway v2.4.1 went out at 17:28 UTC. But I thought we had canary running. Let me check logs."
+    },
+    {
+      "user": "steven.buchanan",
+      "timestamp": "2026-08-11T19:45:33Z",
+      "text": "Canary looks fine. Error rate is ticking down. Probably a transient. I'll keep watching."
+    },
+    {
+      "user": "andrew.fuller",
+      "timestamp": "2026-08-12T14:22:08Z",
+      "text": "🚨 We have a SEV-1. Order processing is down. Error rate hit 34%. Customers are calling support. Paging on-call now."
+    },
+    {
+      "user": "nancy.davolio",
+      "timestamp": "2026-08-12T14:28:00Z",
+      "text": "On it. Looking at the DB. Connection pool is maxed out — all 200 connections in use. Order service is hanging waiting for connections."
+    },
+    {
+      "user": "janet.leverling",
+      "timestamp": "2026-08-12T14:35:00Z",
+      "text": "This started Monday night with the API gateway rollout. The gateway is probably not releasing connections properly."
+    },
+    {
+      "user": "nancy.davolio",
+      "timestamp": "2026-08-12T15:10:00Z",
+      "text": "Restarted connection pool manager. Error rate dropping. But still seeing ~8% failures. Root cause is connection pool exhaustion, NOT the gateway."
+    },
+    {
+      "user": "andrew.fuller",
+      "timestamp": "2026-08-13T09:00:00Z",
+      "text": "We ran a DB migration script last night (Aug 12 → 13) around 11pm. Rebuilt some indexes on orders table. Could that have caused Monday's issue? Timeline doesn't add up."
+    },
+    {
+      "user": "steven.buchanan",
+      "timestamp": "2026-08-13T09:15:00Z",
+      "text": "No the migration was AFTER the incident started. Monday was definitely the gateway rollout causing connection leaks. Migration may have made it worse Wednesday."
+    },
+    {
+      "user": "nancy.davolio",
+      "timestamp": "2026-08-14T16:00:00Z",
+      "text": "Fix deployed. Error rate back to 0.1%. Marking incident mitigated. Roughly 60+ orders were affected across all customers."
+    },
+    {
+      "user": "robert.king",
+      "timestamp": "2026-08-19T08:30:00Z",
+      "text": "Heads up — Contoso is still reporting issues on specific orders. Looks like some orders got stuck in a bad state and weren't cleaned up. @nancy.davolio can you look?"
+    }
+  ]
+}
