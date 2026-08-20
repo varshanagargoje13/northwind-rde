@@ -143,6 +143,14 @@ def dri_review(
         flag = f"  {YELLOW}** I'M NOT SURE — DRI review required{RESET}" if sig.uncertain else ""
         print(f"    {col}[{'?' if sig.uncertain else '+'}] [{sig.confidence} {sig.score:.2f}]{RESET}  "
               f"{cat}  {DIM}({sig.reason}){RESET}{flag}")
+        # Log every item to the audit trail regardless of confidence level
+        _log_override(
+            item_type="conflict",
+            item_id=sig.item_id,
+            original=f"confidence={sig.confidence}, score={sig.score}, reason={sig.reason}",
+            override="auto-approved-uncertain" if sig.uncertain else f"auto-approved-{sig.confidence.lower()}",
+            dri="SYSTEM",
+        )
         if sig.uncertain:
             uncertain_items.append({"type": "conflict", "id": sig.item_id, "signal": sig})
         else:
@@ -157,6 +165,14 @@ def dri_review(
         flag  = f"  {YELLOW}** I'M NOT SURE — DRI review required{RESET}" if sig.uncertain else ""
         print(f"    {col}[{'?' if sig.uncertain else '+'}] [{sig.confidence} {sig.score:.2f}]{RESET}  "
               f"[{prio}] {title[:55]}  {DIM}({sig.reason}){RESET}{flag}")
+        # Log every item to the audit trail regardless of confidence level
+        _log_override(
+            item_type="action",
+            item_id=sig.item_id,
+            original=f"confidence={sig.confidence}, score={sig.score}, reason={sig.reason}",
+            override="auto-approved-uncertain" if sig.uncertain else f"auto-approved-{sig.confidence.lower()}",
+            dri="SYSTEM",
+        )
         if sig.uncertain:
             uncertain_items.append({"type": "action", "id": sig.item_id, "signal": sig})
         else:
@@ -173,14 +189,6 @@ def dri_review(
         print(f"\n  {YELLOW}[HITL] {len(uncertain_items)} item(s) flagged as uncertain.{RESET}")
         print(f"  {YELLOW}        Production: DRI approves/rejects each before comms send.{RESET}")
         print(f"  {YELLOW}        Thin slice: auto-approving; logged to override_log.jsonl.{RESET}")
-        for item in uncertain_items:
-            _log_override(
-                item_type=item["type"],
-                item_id=item["id"],
-                original=f"confidence={item['signal'].confidence}, score={item['signal'].score}",
-                override="auto-approved-uncertain",
-                dri="SYSTEM",
-            )
     else:
         print(f"\n  {GREEN}[HITL] All items at HIGH/MEDIUM confidence — no DRI flags.{RESET}")
 
