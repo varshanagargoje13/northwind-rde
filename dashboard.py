@@ -5,8 +5,12 @@ Run: streamlit run dashboard.py
 """
 
 import json
+import os
 import re
+import smtplib
 from datetime import datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from pathlib import Path
 
 import plotly.graph_objects as go
@@ -17,8 +21,42 @@ st.set_page_config(
     page_title="Northwind Escalation Synthesizer",
     page_icon="🚨",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="auto",
 )
+
+# ── Sidebar — SMTP configuration ──────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("## Email / SMTP Settings")
+    st.caption("Configure to enable 'Send Customer Email'. Values default to env vars.")
+    smtp_host = st.text_input("SMTP Host",     value=os.environ.get("SMTP_HOST", "smtp.gmail.com"))
+    smtp_port = st.number_input("SMTP Port",   value=int(os.environ.get("SMTP_PORT", "587")), step=1)
+    smtp_user = st.text_input("SMTP Username", value=os.environ.get("SMTP_USER", ""))
+    smtp_pass = st.text_input("SMTP Password", value=os.environ.get("SMTP_PASSWORD", ""), type="password")
+    sender_name = st.text_input("Sender Name", value="Northwind Support")
+    st.divider()
+    st.caption("Credentials are never stored. Enter each session or set env vars: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`.")
+
+
+def _send_email(to_addr: str, cc_addr: str, subject: str, body: str) -> tuple[bool, str]:
+    """Send a plain-text email. Returns (success, message)."""
+    if not smtp_user or not smtp_pass:
+        return False, "SMTP username / password not set. Configure them in the sidebar."
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"]    = f"{sender_name} <{smtp_user}>"
+        msg["To"]      = to_addr
+        msg["CC"]      = cc_addr
+        msg["Subject"] = subject
+        msg.attach(MIMEText(body, "plain"))
+        with smtplib.SMTP(smtp_host, int(smtp_port)) as server:
+            server.ehlo()
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            recipients = [a.strip() for a in (to_addr + "," + cc_addr).split(",") if a.strip()]
+            server.sendmail(smtp_user, recipients, msg.as_string())
+        return True, f"Email sent to {to_addr}"
+    except Exception as exc:
+        return False, f"Send failed: {exc}"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT      = Path(__file__).parent
@@ -424,6 +462,123 @@ with ba2:
         <span class='badge badge-green'>✓ Actionable</span>
     </div>
     """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CUSTOMER EMAIL COMPOSER
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### Send Customer Update Email")
+st.caption("Pre-filled from synthesized data. Edit before sending. SMTP credentials are configured in the sidebar.")
+
+inc       = account["current_incident"]
+csm_name  = account["csm"]
+tam_name  = account["technical_account_manager"]
+company   = account["company_name"]
+renewal   = account["renewal_date"]
+
+_default_to      = "d.hartley@contoso-ltd.com"
+_default_cc      = f"m.peacock@contoso-ltd.com, {smtp_user}"
+_default_subject = f"[ACTION REQUIRED] Order Processing Update — {company} / INC-2026-0812"
+
+_default_body = f"""Hi Derek,
+
+Thank you for your continued patience. Here is a concise update on the order processing incident affecting {company}.
+
+---
+WHAT WE ARE SEEING
+Intermittent failures on international order submissions since Aug 12. Domestic orders are unaffected. Two orders (ORD-55892, ORD-55901) remain in a stuck state and are our immediate priority.
+
+WHAT WE HAVE ALREADY DONE
+- Deployed a connection pool fix on Aug 14 (error rate dropped from 52% peak to ~1.4%)
+- Identified that international routing uses a separate, smaller connection pool (capacity issue)
+- Opened Jira ticket NWAPI-3362 to resolve remaining stuck orders
+
+WHAT WE BELIEVE IS THE ROOT CAUSE
+A database migration on Aug 13 compounded an existing international connection pool limitation (pool size 50 vs. 200 for domestic). This caused order submissions to time out for international customers first. A cache invalidation gap (ENG-3321) is also under review as a contributing factor.
+
+WHAT WE ARE DOING NEXT
+1. Assign and resolve NWAPI-3362 (stuck orders ORD-55892, ORD-55901) — owner being assigned today
+2. Audit all enterprise accounts for any additional stuck orders
+3. Reconcile the true order count affected and provide a corrected RCA
+4. Increase international connection pool to match domestic capacity
+
+NEXT UPDATE
+We will send a written update by EOD {datetime.now().strftime('%Y-%m-%d')} with confirmed owner assignments and order resolution status. We are available for a bridge call today — please reply to confirm a time.
+
+We sincerely apologise for the business impact and the delay in resolving the outstanding items. Addressing this is our top priority.
+
+Warm regards,
+{csm_name} (CSM) · {tam_name} (TAM)
+Northwind Support — Enterprise Accounts
+"""
+
+em1, em2 = st.columns([2, 1])
+
+with em1:
+    email_to      = st.text_input("To",      value=_default_to,      key="email_to")
+    email_cc      = st.text_input("CC",      value=_default_cc,      key="email_cc")
+    email_subject = st.text_input("Subject", value=_default_subject, key="email_subject")
+    email_body    = st.text_area("Email Body", value=_default_body, height=420, key="email_body")
+
+    send_col, preview_col = st.columns([1, 3])
+    with send_col:
+        send_clicked = st.button("Send Email", type="primary", use_container_width=True)
+    with preview_col:
+        if not smtp_user:
+            st.warning("Set SMTP credentials in the sidebar to enable sending.")
+
+    if send_clicked:
+        ok, msg = _send_email(email_to, email_cc, email_subject, email_body)
+        if ok:
+            st.success(f"✓ {msg}")
+            # Log send event to override_log
+            log_path = OUT_DIR / "override_log.jsonl"
+            log_path.parent.mkdir(exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps({
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                    "dri": smtp_user or "dashboard-user",
+                    "item_type": "email",
+                    "item_id": f"to:{email_to}",
+                    "original": f"subject={email_subject}",
+                    "override": "email-sent",
+                }) + "\n")
+        else:
+            st.error(f"✗ {msg}")
+
+with em2:
+    st.markdown("""
+    <div class='card' style='margin-top:28px;'>
+    <div class='card-title'>Customer Summary &lt;2 min, non-technical</div>
+    <div style='font-size:12px;color:#94a3b8;line-height:1.8;'>
+        <b style='color:#e2e8f0;'>What we're seeing:</b><br>
+        Intermittent mismatches in shipment visibility, disproportionately affecting international shipments.<br><br>
+        <b style='color:#e2e8f0;'>What we've already changed:</b><br>
+        Connection pool fix deployed; telemetry still shows elevated international error rate (1.4%).<br><br>
+        <b style='color:#e2e8f0;'>What we think is most likely:</b><br>
+        A pool-size gap + cache invalidation issue causing timeouts for international order patterns.<br><br>
+        <b style='color:#e2e8f0;'>What we're doing next:</b><br>
+        Resolving ORD-55892 &amp; ORD-55901; auditing all enterprise accounts; corrected RCA by EOD.<br><br>
+        <b style='color:#e2e8f0;'>Next update:</b><br>
+        EOD today with named owners.
+    </div>
+    </div>
+
+    <div class='card'>
+    <div class='card-title'>Recipient Context</div>
+    <div style='font-size:12px;color:#94a3b8;line-height:1.8;'>
+        <b style='color:#e2e8f0;'>Primary:</b> Derek Hartley (VP Procurement)<br>
+        <b style='color:#e2e8f0;'>CC:</b> Margaret Peacock (Ops), CSM<br>
+        <b style='color:#e2e8f0;'>Tone:</b> Urgent · Exec-level<br>
+        <b style='color:#e2e8f0;'>Last update sent:</b>
+            <span style='color:#ef4444;'>2026-08-13 — 6 days ago</span><br>
+        <b style='color:#e2e8f0;'>Renewal:</b> {renewal} · HIGH risk<br>
+        <b style='color:#e2e8f0;'>Competitor eval:</b>
+            <span style='color:#ef4444;'>ACTIVE</span>
+    </div>
+    </div>
+    """.format(renewal=renewal), unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FOOTER
