@@ -35,6 +35,42 @@
       {"endpoint": "GET /api/orders/{id}/status", "error_count": 8892, "error_type": "504 Gateway Timeout"},
       {"endpoint": "PUT /api/orders/{id}/confirm", "error_count": 412, "error_type": "503 Service Unavailable"}
     ],
+    "error_rate_by_segment": {
+      "note": "Segment breakdown available from 2026-08-12T14:00Z onward (post-SEV-1 instrumentation)",
+      "international": {
+        "current_error_rate_pct": 2.4,
+        "peak_error_rate_pct": 61.2,
+        "peak_time": "2026-08-14T06:00:00Z",
+        "connection_pool_size": 50,
+        "connection_pool_max_hit": true,
+        "note": "International pool sized at 50 (introduced in v2.4.1) — exhausted first"
+      },
+      "domestic": {
+        "current_error_rate_pct": 0.1,
+        "peak_error_rate_pct": 12.3,
+        "peak_time": "2026-08-14T06:00:00Z",
+        "connection_pool_size": 200,
+        "connection_pool_max_hit": true,
+        "note": "Domestic pool hit max only after international spill-over"
+      }
+    },
+    "cache_hit_rates": {
+      "note": "Order status query cache — measured at order-service layer",
+      "pre_incident_baseline": {
+        "period": "2026-08-08 to 2026-08-11",
+        "hit_rate_pct": 84.2
+      },
+      "during_incident": {
+        "period": "2026-08-12 to 2026-08-14",
+        "hit_rate_pct": 11.7,
+        "note": "Cache bypassed due to ENG-3321 invalidation bug — stale entries not evicted under pool pressure"
+      },
+      "post_mitigation": {
+        "period": "2026-08-14T17:00Z onward",
+        "hit_rate_pct": 71.4,
+        "note": "Cache warming in progress — not yet back to baseline"
+      }
+    },
     "first_anomaly_detected": "2026-08-11T18:00:00Z",
     "peak_impact_time": "2026-08-14T06:00:00Z",
     "mitigation_time": "2026-08-14T16:00:00Z",
