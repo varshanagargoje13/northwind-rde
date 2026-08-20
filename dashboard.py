@@ -1,0 +1,439 @@
+"""
+Northwind Escalation Synthesizer — Streamlit Dashboard
+Reads live from data/ and outputs/ folders.
+Run: streamlit run dashboard.py
+"""
+
+import json
+import re
+from datetime import datetime
+from pathlib import Path
+
+import plotly.graph_objects as go
+import streamlit as st
+
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Northwind Escalation Synthesizer",
+    page_icon="🚨",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+ROOT      = Path(__file__).parent
+DATA_DIR  = ROOT / "data"
+OUT_DIR   = ROOT / "outputs"
+
+# ── Load data ─────────────────────────────────────────────────────────────────
+@st.cache_data
+def load_data():
+    account   = json.loads((DATA_DIR / "account_summary.json").read_text(encoding="utf-8"))
+    telemetry = json.loads((DATA_DIR / "telemetry.json").read_text(encoding="utf-8"))
+    jira      = json.loads((DATA_DIR / "jira_tickets.json").read_text(encoding="utf-8"))
+    zendesk   = json.loads((DATA_DIR / "zendesk_ticket.json").read_text(encoding="utf-8"))
+    slack     = json.loads((DATA_DIR / "slack_thread.json").read_text(encoding="utf-8"))
+    return account, telemetry, jira, zendesk, slack
+
+account, telemetry, jira, zendesk, slack = load_data()
+
+def load_override_log():
+    log_path = OUT_DIR / "override_log.jsonl"
+    if not log_path.exists():
+        return []
+    lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+    return [json.loads(l) for l in lines if l.strip()]
+
+override_log = load_override_log()
+
+# ── CSS ───────────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+[data-testid="stAppViewContainer"] { background: #0f1117; }
+[data-testid="stHeader"] { background: #0f1117; }
+.block-container { padding: 1.5rem 2rem; max-width: 1200px; }
+h1, h2, h3 { color: #e2e8f0 !important; }
+p, li { color: #94a3b8; }
+
+.card {
+    background: #1a1d2e; border: 1px solid #2d3150;
+    border-radius: 10px; padding: 16px; margin-bottom: 12px;
+}
+.card-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    text-transform: uppercase; color: #c7d2fe; margin-bottom: 12px;
+}
+
+/* KPI */
+.kpi-wrap { border-radius: 10px; padding: 16px; border: 1px solid #2d3150; }
+.kpi-before { font-size: 11px; color: #ef4444; text-decoration: line-through; margin-bottom: 4px; }
+.kpi-val { font-size: 28px; font-weight: 800; color: #fff; line-height: 1; }
+.kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px; }
+.kpi-sub { font-size: 11px; margin-top: 5px; }
+
+/* Conflict */
+.conflict-high { background: #1c0a0a; border-left: 4px solid #ef4444; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+.conflict-medium { background: #1c1200; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
+.conflict-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.conflict-desc { font-size: 11px; color: #94a3b8; margin-top: 3px; line-height: 1.5; }
+.conflict-src { font-size: 10px; color: #64748b; margin-top: 4px; }
+
+/* Recommendation */
+.rec-card { background: #12152a; border: 1px solid #2d3150; border-radius: 6px; padding: 10px 12px; margin-bottom: 7px; }
+.rec-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
+.rec-why { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+.rec-src { font-size: 10px; color: #3b82f6; margin-top: 3px; }
+
+/* Badge */
+.badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 20px; margin: 2px; }
+.badge-red    { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
+.badge-yellow { background: #422006; color: #fcd34d; border: 1px solid #78350f; }
+.badge-green  { background: #052e16; color: #86efac; border: 1px solid #14532d; }
+.badge-blue   { background: #0c1a3a; color: #93c5fd; border: 1px solid #1e3a5f; }
+.badge-p0 { background: #450a0a; color: #fca5a5; }
+.badge-p1 { background: #422006; color: #fcd34d; }
+.badge-p2 { background: #0c1a3a; color: #93c5fd; }
+.badge-p3 { background: #1a0a2e; color: #c4b5fd; }
+
+/* Artifact */
+.artifact-box { background: #12152a; border: 1px solid #2d3150; border-radius: 8px; padding: 12px; text-align: center; }
+.artifact-icon { font-size: 22px; margin-bottom: 5px; }
+.artifact-name { font-size: 11px; font-weight: 600; color: #c7d2fe; }
+.artifact-status { font-size: 10px; margin-top: 3px; }
+
+/* Audit */
+.audit-row { font-size: 10px; font-family: monospace; padding: 5px 8px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid; }
+.audit-high   { background: #0a1a0a; border-color: #22c55e; color: #86efac; }
+.audit-medium { background: #1a1200; border-color: #f59e0b; color: #fcd34d; }
+
+/* BA */
+.ba-before { background: #1c0a0a; border: 1px solid #7f1d1d; border-radius: 8px; padding: 14px; }
+.ba-after  { background: #052e16; border: 1px solid #14532d; border-radius: 8px; padding: 14px; }
+.ba-label  { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.ba-before .ba-label { color: #ef4444; }
+.ba-after  .ba-label { color: #22c55e; }
+.ba-text { font-size: 12px; line-height: 1.7; color: #94a3b8; }
+
+hr-custom { border: none; border-top: 1px solid #2d3150; margin: 8px 0; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────────────────────────────────────────
+col_h1, col_h2 = st.columns([3, 1])
+with col_h1:
+    st.markdown("## 🚨 Northwind Escalation Synthesizer — INC-2026-0812")
+    st.markdown(
+        f"**Customer:** {account['company_name']} ({account['tier']}) &nbsp;·&nbsp; "
+        f"**CSM:** {account['csm']} &nbsp;·&nbsp; "
+        f"**TAM:** {account['technical_account_manager']} &nbsp;·&nbsp; "
+        f"**Generated:** 2026-08-19"
+    )
+with col_h2:
+    st.markdown("""
+        <div style='text-align:right;padding-top:10px;'>
+            <span class='badge badge-red'>Status: NOT RESOLVED</span><br><br>
+            <span class='badge badge-yellow'>Renewal: HIGH RISK</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+st.divider()
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KPI TILES
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### KPIs")
+k1, k2, k3, k4 = st.columns(4)
+
+with k1:
+    st.markdown("""
+    <div class='kpi-wrap' style='background:#0d2818;border-color:#14532d;border-top:3px solid #22c55e;'>
+        <div class='kpi-label'>Context Assembly</div>
+        <div class='kpi-before'>4–8 hrs manual</div>
+        <div class='kpi-val'>18ms</div>
+        <div class='kpi-sub' style='color:#22c55e;'>✓ Target &lt;5 min</div>
+    </div>""", unsafe_allow_html=True)
+
+with k2:
+    st.markdown("""
+    <div class='kpi-wrap' style='background:#0c1a3a;border-color:#1e3a5f;border-top:3px solid #3b82f6;'>
+        <div class='kpi-label'>Conflict Detection</div>
+        <div class='kpi-before'>1–2 hrs manual</div>
+        <div class='kpi-val'>4</div>
+        <div class='kpi-sub' style='color:#3b82f6;'>✓ &lt;30 sec &nbsp;·&nbsp; 2 HIGH, 2 MED</div>
+    </div>""", unsafe_allow_html=True)
+
+with k3:
+    st.markdown("""
+    <div class='kpi-wrap' style='background:#1a1200;border-color:#78350f;border-top:3px solid #f59e0b;'>
+        <div class='kpi-label'>Source Citation (Audit Trail)</div>
+        <div class='kpi-before'>0% — manual notes</div>
+        <div class='kpi-val'>100%</div>
+        <div class='kpi-sub' style='color:#f59e0b;'>✓ Every claim cited [Source]</div>
+    </div>""", unsafe_allow_html=True)
+
+with k4:
+    st.markdown("""
+    <div class='kpi-wrap' style='background:#1a0a2e;border-color:#4c1d95;border-top:3px solid #a855f7;'>
+        <div class='kpi-label'>Comms Clarity</div>
+        <div class='kpi-before'>Vague / no context</div>
+        <div class='kpi-val'>Before→After</div>
+        <div class='kpi-sub' style='color:#a855f7;'>✓ Cited · Conflicts · Actionable</div>
+    </div>""", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ERROR RATE TIMELINE
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### Production Telemetry — Error Rate Timeline")
+
+timeline = telemetry["metrics"]["error_rate_timeline"]
+timestamps = [e["timestamp"][:16].replace("T", " ") for e in timeline]
+error_rates = [e["error_rate_pct"] for e in timeline]
+colors = ["#ef4444" if r > 10 else "#f59e0b" if r > 1 else "#22c55e" for r in error_rates]
+
+fig = go.Figure()
+fig.add_trace(go.Bar(
+    x=timestamps, y=error_rates,
+    marker_color=colors,
+    hovertemplate="<b>%{x}</b><br>Error rate: %{y}%<extra></extra>",
+))
+fig.add_hline(y=0.2, line_dash="dot", line_color="#64748b",
+              annotation_text="Baseline 0.2%", annotation_font_color="#64748b")
+fig.add_vrect(x0="2026-08-12 14:00", x1="2026-08-12 15:00",
+              fillcolor="#ef4444", opacity=0.15, line_width=0,
+              annotation_text="SEV-1", annotation_font_color="#fca5a5", annotation_position="top left")
+fig.add_vrect(x0="2026-08-14 16:00", x1="2026-08-14 17:00",
+              fillcolor="#22c55e", opacity=0.15, line_width=0,
+              annotation_text="Fix deployed", annotation_font_color="#86efac", annotation_position="top left")
+fig.update_layout(
+    paper_bgcolor="#1a1d2e", plot_bgcolor="#1a1d2e",
+    font=dict(color="#94a3b8", size=11),
+    margin=dict(l=40, r=20, t=20, b=60),
+    height=220,
+    xaxis=dict(showgrid=False, tickangle=-35, tickfont_size=9, color="#64748b"),
+    yaxis=dict(showgrid=True, gridcolor="#2d3150", title="Error Rate %", color="#64748b"),
+    bargap=0.2,
+)
+st.plotly_chart(fig, use_container_width=True)
+
+col_tl1, col_tl2, col_tl3 = st.columns(3)
+col_tl1.metric("Current Error Rate", f"{telemetry['metrics']['error_rate_timeline'][-1]['error_rate_pct']}%", delta="-50.9% from peak", delta_color="normal")
+col_tl2.metric("Peak Error Rate", "52.3%", "Aug 14 06:00 UTC")
+col_tl3.metric("Stuck Orders", str(telemetry["metrics"]["stuck_orders_count"]), "ORD-55892, ORD-55901")
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFLICTS + RECOMMENDATIONS
+# ─────────────────────────────────────────────────────────────────────────────
+col_cf, col_rec = st.columns(2)
+
+with col_cf:
+    st.markdown("""
+    <div class='card'>
+    <div class='card-title'>Cross-Artifact Conflicts &nbsp;
+        <span class='badge badge-red'>2 HIGH</span>
+        <span class='badge badge-yellow'>2 MED</span>
+    </div>
+    <div class='conflict-high'>
+        <div class='conflict-title'>Timeline — Incident Start &nbsp; <span class='badge badge-red'>HIGH</span></div>
+        <div class='conflict-desc'>53-hour gap: Slack says Aug 11 18:00 UTC, Postmortem says Aug 13 23:00 UTC. Wrong start time = wrong root cause attribution.</div>
+        <div class='conflict-src'>Sources: Slack · Telemetry · Zendesk · Executive Email · Postmortem</div>
+    </div>
+    <div class='conflict-high'>
+        <div class='conflict-title'>Resolution Status &nbsp; <span class='badge badge-red'>HIGH</span></div>
+        <div class='conflict-desc'>Postmortem: RESOLVED (Aug 14 16:00). Zendesk/Slack/Telemetry/Jira: still OPEN — 1.4% error rate, NWAPI-3362 unassigned.</div>
+        <div class='conflict-src'>Sources: All 7 artifacts</div>
+    </div>
+    <div class='conflict-medium'>
+        <div class='conflict-title'>Impact — Orders Affected &nbsp; <span class='badge badge-yellow'>MED</span></div>
+        <div class='conflict-desc'>Range: 23 (Postmortem) → 31 (Telemetry) → 47 (Zendesk/Email) → 60+ (Slack/Jira). Spread of 37 orders — unreconciled.</div>
+        <div class='conflict-src'>Sources: Postmortem · Zendesk · Slack · Jira · Telemetry · Email</div>
+    </div>
+    <div class='conflict-medium'>
+        <div class='conflict-title'>Impact — Revenue at Risk &nbsp; <span class='badge badge-yellow'>MED</span></div>
+        <div class='conflict-desc'>$85K (Postmortem) vs $200K (Account Summary / Executive Email) — 2.4× gap. Affects SLA credits and goodwill decisions.</div>
+        <div class='conflict-src'>Sources: Postmortem · Account Summary · Executive Email</div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_rec:
+    st.markdown("""
+    <div class='card'>
+    <div class='card-title'>Recommendations &nbsp;
+        <span class='badge badge-red'>3 P0</span>
+        <span class='badge badge-yellow'>2 P1</span>
+        <span class='badge badge-blue'>3 P2</span>
+    </div>
+    <div class='rec-card'>
+        <span class='badge badge-p0'>P0</span>
+        <div class='rec-title'>Fix stuck orders ORD-55892 &amp; ORD-55901</div>
+        <div class='rec-why'>Incident NOT resolved from customer view. Assign NWAPI-3362 immediately.</div>
+        <div class='rec-src'>[Zendesk ZD-98741] [Jira NWAPI-3362] [Slack]</div>
+    </div>
+    <div class='rec-card'>
+        <span class='badge badge-p0'>P0</span>
+        <div class='rec-title'>Send exec update to Derek Hartley (VP, Contoso)</div>
+        <div class='rec-why'>Last update Aug 13. CEO CC'd. Renewal threatened. Competitor eval active. EOD deadline.</div>
+        <div class='rec-src'>[Executive Email] [Account Summary ACC-00441]</div>
+    </div>
+    <div class='rec-card'>
+        <span class='badge badge-p0'>P0</span>
+        <div class='rec-title'>Audit ALL customers for stuck orders</div>
+        <div class='rec-why'>Postmortem: 3 enterprise accounts affected. Only Contoso has surfaced stuck orders so far.</div>
+        <div class='rec-src'>[Postmortem] [Slack] [Account Summary]</div>
+    </div>
+    <div class='rec-card'>
+        <span class='badge badge-p1'>P1</span>
+        <div class='rec-title'>Reconcile true order impact count</div>
+        <div class='rec-why'>Claims range 23–60+. Accurate number needed for SLA credit and customer comms.</div>
+        <div class='rec-src'>[Postmortem] [Zendesk] [Slack] [Jira] [Telemetry]</div>
+    </div>
+    <div class='rec-card'>
+        <span class='badge badge-p1'>P1</span>
+        <div class='rec-title'>Resolve root cause timeline discrepancy</div>
+        <div class='rec-why'>Slack/Telemetry say Aug 11; Postmortem says Aug 13. Wrong root cause = wrong fix.</div>
+        <div class='rec-src'>[Slack] [Postmortem] [Jira] [Telemetry]</div>
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACCOUNT HEALTH + HITL
+# ─────────────────────────────────────────────────────────────────────────────
+col_acc, col_hitl = st.columns(2)
+
+with col_acc:
+    inc = account["current_incident"]
+    hist = account["support_history_90d"]
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("Health Score", f"{account['health_score']}/100", delta="Declining", delta_color="inverse")
+    a2.metric("NPS Score", f"{account['nps_score']}/10")
+    a3.metric("SLA Breaches", str(hist["sla_breaches"]), delta="90 days", delta_color="inverse")
+    a4.metric("Revenue at Risk", f"${inc['estimated_revenue_at_risk_usd']:,}")
+
+    st.markdown(f"""
+    <div class='card'>
+    <div class='card-title'>Account — {account['company_name']}</div>
+    <div style='font-size:12px;color:#94a3b8;line-height:1.9;'>
+        <b style='color:#e2e8f0;'>Contract:</b> ${account['contract_value_usd_annual']:,}/year &nbsp;·&nbsp;
+        <b style='color:#e2e8f0;'>Renewal:</b> {account['renewal_date']}<br>
+        <b style='color:#e2e8f0;'>Exec contact:</b> Derek Hartley (VP Procurement)<br>
+        <b style='color:#e2e8f0;'>Last exec update:</b>
+            <span style='color:#ef4444;'>2026-08-13 — OVERDUE (6 days ago)</span><br>
+        <b style='color:#e2e8f0;'>Open tickets (90d):</b> {hist['total_tickets']} total · {hist['urgent_tickets']} urgent<br>
+        <b style='color:#e2e8f0;'>Competitor eval:</b>
+            <span style='color:#ef4444;'>ACTIVE — per executive email</span><br>
+        <b style='color:#e2e8f0;'>Intl error rate:</b> 2.4% &nbsp;·&nbsp;
+        <b style='color:#e2e8f0;'>Domestic:</b> 0.1%
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with col_hitl:
+    high_count   = sum(1 for e in override_log if "high"   in e.get("override",""))
+    medium_count = sum(1 for e in override_log if "medium" in e.get("override",""))
+    uncertain    = sum(1 for e in override_log if "uncertain" in e.get("override",""))
+
+    h1, h2, h3 = st.columns(3)
+    h1.metric("HIGH Confidence", high_count)
+    h2.metric("MED Confidence",  medium_count)
+    h3.metric("Flagged Uncertain", uncertain)
+
+    audit_html = "<div class='card'><div class='card-title'>HITL Audit Trail — override_log.jsonl</div>"
+    for entry in override_log[:7]:
+        css = "audit-high" if "high" in entry["override"] else "audit-medium" if "medium" in entry["override"] else "audit-medium"
+        item_id = entry["item_id"][:45]
+        conf    = entry["original"].split(",")[0].replace("confidence=","")
+        score   = entry["original"].split(",")[1].replace(" score=","").strip() if "score" in entry["original"] else ""
+        override = entry["override"]
+        audit_html += f"<div class='audit-row {css}'>{entry['item_type']} · {item_id} · {conf} {score} · {override}</div>"
+    if len(override_log) > 7:
+        audit_html += f"<div style='font-size:10px;color:#475569;margin-top:5px;'>+ {len(override_log)-7} more entries</div>"
+    audit_html += "</div>"
+    st.markdown(audit_html, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7 ARTIFACT SOURCES
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### 7 Artifact Sources")
+artifacts = [
+    ("🎫", "Zendesk",      "ZD-98741 · ZD-99788",        "conflict"),
+    ("💬", "Slack",        "#incident · 16 msgs",         "conflict"),
+    ("📋", "Postmortem",   "APPROVED · INC-0812",         "conflict"),
+    ("📊", "Telemetry",    "DEGRADED · 1.4% error rate",  "conflict"),
+    ("🏢", "Account",      f"Health {account['health_score']} · HIGH risk","conflict"),
+    ("🔖", "Jira",         "5 tickets · 2 open",          "conflict"),
+    ("✉️", "Exec Email",   "VP + CEO escalated",          "conflict"),
+]
+cols = st.columns(7)
+for col, (icon, name, status, state) in zip(cols, artifacts):
+    col.markdown(f"""
+    <div class='artifact-box'>
+        <div class='artifact-icon'>{icon}</div>
+        <div class='artifact-name'>{name}</div>
+        <div class='artifact-status' style='color:#f59e0b;'>{status}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BEFORE / AFTER
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### Comms Clarity — Before vs After")
+ba1, ba2 = st.columns(2)
+
+with ba1:
+    st.markdown("""
+    <div class='ba-before'>
+        <div class='ba-label'>BEFORE — Manual Triage (4–8 hours)</div>
+        <div class='ba-text'>
+            "Customer reports order processing failures. Engineering says fixed.
+            Need to investigate further."
+        </div>
+        <br>
+        <span class='badge badge-red'>✗ Vague</span>
+        <span class='badge badge-red'>✗ No sources</span>
+        <span class='badge badge-red'>✗ No conflicts</span>
+        <span class='badge badge-red'>✗ No actions</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+with ba2:
+    st.markdown("""
+    <div class='ba-after'>
+        <div class='ba-label'>AFTER — Synthesizer (18ms total)</div>
+        <div class='ba-text'>
+            "Contoso Ltd | 2 SLA breaches [Account Summary].
+            Postmortem: RESOLVED. Customer: NOT RESOLVED [Zendesk/Email].
+            Error rate 1.4% vs 0.2% baseline [Telemetry].
+            2 critical Jira tickets open. NWAPI-3362 unassigned.
+            VP Derek Hartley threatening non-renewal + competitor evaluation [Email].
+            Recommended: assign NWAPI-3362, send exec update, run order cleanup."
+        </div>
+        <br>
+        <span class='badge badge-green'>✓ Specific</span>
+        <span class='badge badge-green'>✓ Cited</span>
+        <span class='badge badge-green'>✓ Conflicts flagged</span>
+        <span class='badge badge-green'>✓ HITL reviewed</span>
+        <span class='badge badge-green'>✓ Actionable</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FOOTER
+# ─────────────────────────────────────────────────────────────────────────────
+st.divider()
+st.markdown(
+    "<div style='text-align:center;font-size:11px;color:#475569;'>"
+    "Northwind Escalation Synthesizer &nbsp;·&nbsp; "
+    "Sources: Zendesk · Slack · Postmortem · Telemetry · Account Summary · Jira · Executive Email &nbsp;·&nbsp; "
+    "Powered by Claude claude-opus-5"
+    "</div>",
+    unsafe_allow_html=True,
+)
