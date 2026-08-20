@@ -161,7 +161,7 @@ hr-custom { border: none; border-top: 1px solid #2d3150; margin: 8px 0; }
 # ─────────────────────────────────────────────────────────────────────────────
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
-    st.markdown("## 🚨 Northwind Escalation Synthesizer — INC-2026-0812")
+    st.markdown("## 🚨 Northwind Escalation Synthesizer")
     st.markdown(
         f"**Customer:** {account['company_name']} ({account['tier']}) &nbsp;·&nbsp; "
         f"**CSM:** {account['csm']} &nbsp;·&nbsp; "
@@ -171,8 +171,7 @@ with col_h1:
 with col_h2:
     st.markdown("""
         <div style='text-align:right;padding-top:10px;'>
-            <span class='badge badge-red'>Status: NOT RESOLVED</span><br><br>
-            <span class='badge badge-yellow'>Renewal: HIGH RISK</span>
+            
         </div>
     """, unsafe_allow_html=True)
 
@@ -200,6 +199,54 @@ for col, (icon, name, status) in zip(art_cols, artifacts_display):
         <div class='artifact-status' style='color:#f59e0b;'>{status}</div>
     </div>
     """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ── Incident table ────────────────────────────────────────────────────────────
+PRIO_BADGE = {
+    "Critical": "<span style='background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;"
+                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Critical</span>",
+    "High":     "<span style='background:#422006;color:#fcd34d;border:1px solid #78350f;"
+                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>High</span>",
+    "Medium":   "<span style='background:#0c1a3a;color:#93c5fd;border:1px solid #1e3a5f;"
+                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Medium</span>",
+    "Low":      "<span style='background:#052e16;color:#86efac;border:1px solid #14532d;"
+                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Low</span>",
+}
+
+rows = ""
+for t in jira["tickets"]:
+    badge = PRIO_BADGE.get(t["priority"], t["priority"])
+    rows += f"""
+    <tr>
+      <td style='padding:9px 14px;font-size:14px;font-weight:600;color:#c7d2fe;white-space:nowrap;'>{t['id']}</td>
+      <td style='padding:9px 14px;font-size:14px;color:#94a3b8;'>{t['title']}</td>
+      <td style='padding:9px 14px;text-align:center;'>{badge}</td>
+    </tr>"""
+
+st.markdown(f"""
+<div style='background:#1a1d2e;border:1px solid #2d3150;border-radius:10px;
+            overflow:hidden;margin-bottom:8px;'>
+  <table style='width:100%;border-collapse:collapse;'>
+    <thead>
+      <tr style='background:#12152a;border-bottom:1px solid #2d3150;'>
+        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
+                   text-transform:uppercase;color:#c7d2fe;text-align:left;width:140px;'>
+          INCIDENT_ID</th>
+        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
+                   text-transform:uppercase;color:#c7d2fe;text-align:left;'>
+          DESCRIPTION</th>
+        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
+                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:120px;'>
+          PRIORITY</th>
+      </tr>
+    </thead>
+    <tbody style='divide-color:#2d3150;'>
+      {rows}
+    </tbody>
+  </table>
+</div>
+""", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
