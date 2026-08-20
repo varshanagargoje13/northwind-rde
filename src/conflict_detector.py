@@ -192,6 +192,28 @@ def detect_revenue_conflicts(artifacts: list[dict]) -> list[Conflict]:
     return conflicts
 
 
+def detect_from_graph(g) -> list[Conflict]:
+    """
+    Run the SPARQL-based conflict detectors over a rdflib Graph and convert
+    results to Conflict dataclasses, keeping the pipeline interface uniform.
+    """
+    try:
+        from .ontology.sparql_detector import detect_all as sparql_detect_all
+    except ImportError:
+        return []
+    raw = sparql_detect_all(g)
+    out = []
+    for r in raw:
+        out.append(Conflict(
+            category    = r["category"],
+            description = r["description"],
+            sources     = r.get("sources", []),
+            details     = r.get("details", []),
+            severity    = r["severity"],
+        ))
+    return out
+
+
 def detect_all(artifacts: list[dict]) -> list[Conflict]:
     detectors = [
         detect_timeline_conflicts,

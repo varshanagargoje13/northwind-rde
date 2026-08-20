@@ -212,7 +212,23 @@ def load_all(data_dir: Path) -> list[dict]:
     ]
     artifacts = []
     for path, loader in loaders:
-        artifact = loader(path)
-        artifact["file"] = path.name
-        artifacts.append(artifact)
+        try:
+            artifact = loader(path)
+            artifact["file"] = path.name
+            artifacts.append(artifact)
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                f"Artifact file not found: {path}\n"
+                f"Ensure all 7 data files exist under {data_dir}/"
+            ) from None
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                f"Malformed JSON in {path.name} (line {exc.lineno}): {exc.msg}"
+            ) from exc
+        except (KeyError, IndexError, StopIteration) as exc:
+            raise ValueError(
+                f"Unexpected structure in {path.name}: {exc}"
+            ) from exc
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load {path.name}: {exc}") from exc
     return artifacts

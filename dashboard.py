@@ -70,20 +70,69 @@ def load_conflicts_and_actions():
         for c in conflicts
     ]
     actions = [
-        {"priority": "P0", "title": "Fix stuck orders ORD-55892, ORD-55901",
-         "sources": ["Zendesk", "Jira", "Slack"]},
-        {"priority": "P0", "title": "Send executive update to Derek Hartley",
-         "sources": ["Executive Email", "Account Summary"]},
-        {"priority": "P0", "title": "Audit all customers for stuck orders",
-         "sources": ["Postmortem", "Slack", "Account Summary"]},
-        {"priority": "P1", "title": "Reconcile true order impact count",
-         "sources": ["Postmortem", "Zendesk", "Slack", "Jira", "Telemetry"]},
-        {"priority": "P1", "title": "Resolve root cause timeline discrepancy",
-         "sources": ["Slack", "Postmortem", "Jira", "Telemetry"]},
-        {"priority": "P2", "title": "Implement DB connection pool circuit breaker",
-         "sources": ["Postmortem", "Jira"]},
-        {"priority": "P3", "title": "Schedule emergency QBR with Contoso",
-         "sources": ["Account Summary", "Executive Email"]},
+        {
+            "priority": "P0",
+            "title": "Fix stuck orders ORD-55892, ORD-55901",
+            "owner": "Engineering On-Call",
+            "deadline": "Today — before EOD",
+            "why": "Customer-reported stuck orders unresolved since Aug 11. NWAPI-3362 is Open and Unassigned. Contoso VP email cites these as the primary blocker to renewal.",
+            "steps": "1. Assign NWAPI-3362 to on-call engineer. 2. Manually re-queue ORD-55892 and ORD-55901 through the order processing pipeline. 3. Confirm successful delivery and notify CSM.",
+            "sources": ["Zendesk", "Jira", "Slack"],
+        },
+        {
+            "priority": "P0",
+            "title": "Send executive update to Derek Hartley",
+            "owner": "CSM / TAM",
+            "deadline": "EOD today",
+            "why": "Last customer update was Aug 13 — 6 days overdue. CEO Margaret Peacock is CC'd. Renewal is threatened and an active competitor evaluation is underway.",
+            "steps": "1. Draft exec-level summary: acknowledge delay, confirm stuck-order fix ETA, name the responsible engineer. 2. Schedule a 30-min follow-up call this week. 3. CC TAM and VP Support.",
+            "sources": ["Executive Email", "Account Summary"],
+        },
+        {
+            "priority": "P0",
+            "title": "Audit all customers for stuck orders",
+            "owner": "Support Engineering",
+            "deadline": "Today",
+            "why": "Postmortem notes 3 enterprise accounts were affected. Only Contoso has surfaced stuck orders so far — others may be silently impacted.",
+            "steps": "1. Query order processing pipeline for all orders with status=STUCK since Aug 11. 2. Identify affected accounts. 3. Proactively notify CSMs for each account found.",
+            "sources": ["Postmortem", "Slack", "Account Summary"],
+        },
+        {
+            "priority": "P1",
+            "title": "Reconcile true order impact count",
+            "owner": "TAM + Engineering",
+            "deadline": "This week",
+            "why": "Claims range from 23 (Postmortem) to 60+ (Slack/Jira) — a spread of 37. An accurate number is required for SLA credit calculation and executive comms.",
+            "steps": "1. Pull canonical order count from the order DB (not from artifact estimates). 2. Cross-reference with Zendesk, Jira, and Telemetry. 3. Publish agreed count to all stakeholders.",
+            "sources": ["Postmortem", "Zendesk", "Slack", "Jira", "Telemetry"],
+        },
+        {
+            "priority": "P1",
+            "title": "Resolve root cause timeline discrepancy",
+            "owner": "Engineering Lead",
+            "deadline": "This week",
+            "why": "Slack/Telemetry show incident start Aug 11 18:00 UTC; Postmortem says Aug 13 23:00 UTC — a 53-hour gap. Wrong start time leads to wrong root cause attribution and incomplete fix.",
+            "steps": "1. Pull raw telemetry error logs from Aug 11–14. 2. Identify first anomaly spike. 3. Amend postmortem with corrected timeline. 4. Verify root cause chain is still valid.",
+            "sources": ["Slack", "Postmortem", "Jira", "Telemetry"],
+        },
+        {
+            "priority": "P2",
+            "title": "Implement DB connection pool circuit breaker",
+            "owner": "Platform Engineering",
+            "deadline": "This sprint",
+            "why": "Pool exhaustion (50 intl vs 200 domestic) compounded by the Aug 13 migration caused the cascading failure. Without a circuit breaker, the same pattern will recur.",
+            "steps": "1. Add circuit breaker around international DB pool. 2. Set pool limit to 200 (match domestic). 3. Add alerting at 80% pool saturation. 4. Load-test in staging before deploying.",
+            "sources": ["Postmortem", "Jira"],
+        },
+        {
+            "priority": "P3",
+            "title": "Schedule emergency QBR with Contoso",
+            "owner": "CSM + VP Support",
+            "deadline": "Within 2 weeks",
+            "why": "Health score 42/100 (declining), NPS 4/10, 2 SLA breaches in 90 days, active competitor eval. A QBR is needed to reset the relationship before renewal.",
+            "steps": "1. Propose QBR agenda: incident RCA, remediation roadmap, SLA credit, renewal discussion. 2. Include VP Support and CTO in the invite. 3. Prepare account health report as pre-read.",
+            "sources": ["Account Summary", "Executive Email"],
+        },
     ]
     return conflict_dicts, actions
 
@@ -91,6 +140,25 @@ def load_conflicts_and_actions():
 override_log        = load_override_log()
 consolidated_state  = load_consolidated_state()
 live_conflicts, live_actions = load_conflicts_and_actions()
+
+
+def compute_citation_counts(conflicts: list[dict], actions: list[dict]) -> dict[str, dict]:
+    """Count how many conflicts and actions cite each source."""
+    counts: dict[str, dict] = {}
+    for c in conflicts:
+        for src in c.get("sources", []):
+            counts.setdefault(src, {"conflicts": 0, "actions": 0})
+            counts[src]["conflicts"] += 1
+    for a in actions:
+        for src in a.get("sources", []):
+            counts.setdefault(src, {"conflicts": 0, "actions": 0})
+            counts[src]["actions"] += 1
+    for src in counts:
+        counts[src]["total"] = counts[src]["conflicts"] + counts[src]["actions"]
+    return dict(sorted(counts.items(), key=lambda x: x[1]["total"], reverse=True))
+
+
+citation_counts = compute_citation_counts(live_conflicts, live_actions)
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -170,12 +238,7 @@ hr-custom { border: none; border-top: 1px solid #2d3150; margin: 8px 0; }
 col_h1, col_h2 = st.columns([3, 1])
 with col_h1:
     st.markdown("## 🚨 Northwind Escalation Synthesizer")
-    st.markdown(
-        f"**Customer:** {account['company_name']} ({account['tier']}) &nbsp;·&nbsp; "
-        f"**CSM:** {account['csm']} &nbsp;·&nbsp; "
-        f"**TAM:** {account['technical_account_manager']} &nbsp;·&nbsp; "
-        f"**Generated:** 2026-08-19"
-    )
+    
 with col_h2:
     st.markdown("""
         <div style='text-align:right;padding-top:10px;'>
@@ -210,6 +273,48 @@ for col, (icon, name, status) in zip(art_cols, artifacts_display):
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# ── Citation Counts ───────────────────────────────────────────────────────────
+with st.expander("📊 Source Citation Counts", expanded=False):
+    st.caption(
+        "How many times each artifact source is referenced across detected conflicts and "
+        "recommended actions — sorted by total citations."
+    )
+
+    max_total = max((v["total"] for v in citation_counts.values()), default=1)
+
+    # Column headers
+    h_src, h_bar, h_cf, h_ac, h_tot = st.columns([2, 4, 1.2, 1.2, 1])
+    h_src.markdown("**Source**")
+    h_bar.markdown("**Citation Weight**")
+    h_cf.markdown("**Conflicts**")
+    h_ac.markdown("**Actions**")
+    h_tot.markdown("**Total**")
+    st.divider()
+
+    for src, cnts in citation_counts.items():
+        c_src, c_bar, c_cf, c_ac, c_tot = st.columns([2, 4, 1.2, 1.2, 1])
+        c_src.markdown(f"**{src}**")
+        c_bar.progress(cnts["total"] / max_total)
+        c_cf.markdown(
+            f"<span style='color:#ef4444;font-weight:700;'>{cnts['conflicts']}</span>",
+            unsafe_allow_html=True,
+        )
+        c_ac.markdown(
+            f"<span style='color:#f59e0b;font-weight:700;'>{cnts['actions']}</span>",
+            unsafe_allow_html=True,
+        )
+        c_tot.markdown(f"**{cnts['total']}**")
+
+    st.divider()
+    most_cited       = next(iter(citation_counts))
+    total_citations  = sum(v["total"] for v in citation_counts.values())
+    st.caption(
+        f"**{total_citations}** total citations across **{len(citation_counts)}** sources — "
+        f"**{most_cited}** is the most-cited source."
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
 # ── Incident table ────────────────────────────────────────────────────────────
 _PRIO_CSS = {
     "Critical": "background:#dc2626;color:#fff;",
@@ -224,24 +329,212 @@ _STATUS_CSS = {
     "Backlog":   "background:#7c3aed;color:#fff;",
 }
 
-# Inject CSS: style Approve=green, Edit=blue-gray, Reject=red via data-key attribute
 st.markdown("""
 <style>
-/* Approve button — green */
-button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:-webkit-any(:-webkit-matches-selector("*"))) { }
-[data-testid^="approve_"] > button { background:#16a34a !important; color:#fff !important; border-color:#16a34a !important; }
-[data-testid^="reject_"]  > button { background:#dc2626 !important; color:#fff !important; border-color:#dc2626 !important; }
-[data-testid^="edit_"]    > button { background:#334155 !important; color:#e2e8f0 !important; border-color:#475569 !important; }
 div[data-testid="column"] button {
     font-size: 12px !important; padding: 4px 6px !important;
     border-radius: 6px !important; width: 100% !important;
     white-space: nowrap !important;
 }
+[data-testid^="review_"] > button {
+    background:#2563eb !important; color:#fff !important;
+    border-color:#2563eb !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
+# ── Incident Review Dialog ────────────────────────────────────────────────────
+@st.dialog("Incident Review", width="large")
+def _incident_review_dialog(ticket: dict, all_actions: list[dict]) -> None:
+    _PRIO_COL = {"Critical": "#dc2626", "High": "#d97706",
+                 "Medium": "#2563eb",   "Low": "#16a34a"}
+    _STAT_COL = {"Open": "#dc2626", "In Review": "#d97706",
+                 "Done": "#16a34a",  "Backlog": "#7c3aed"}
+    _ACT_COL  = {"P0": "#fca5a5", "P1": "#fcd34d",
+                 "P2": "#93c5fd", "P3": "#c4b5fd"}
+
+    pc = _PRIO_COL.get(ticket["priority"], "#334155")
+    sc = _STAT_COL.get(ticket["status"],   "#334155")
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    st.markdown(f"""
+    <div style='background:#12152a;border:1px solid #2d3150;
+                border-radius:8px;padding:16px;margin-bottom:16px;'>
+        <div style='font-size:22px;font-weight:800;color:#c7d2fe;
+                    margin-bottom:6px;'>{ticket["id"]}</div>
+        <div style='font-size:16px;color:#e2e8f0;
+                    margin-bottom:12px;'>{ticket["title"]}</div>
+        <span style='display:inline-block;padding:3px 14px;border-radius:10px;
+                     font-size:13px;font-weight:700;background:{pc};
+                     color:#fff;margin-right:8px;'>{ticket["priority"]}</span>
+        <span style='display:inline-block;padding:3px 14px;border-radius:10px;
+                     font-size:13px;font-weight:700;background:{sc};
+                     color:#fff;'>{ticket["status"]}</span>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Ticket details ────────────────────────────────────────────────────────
+    skip = {"id", "title", "priority", "status"}
+    extras = {k: v for k, v in ticket.items() if k not in skip and v not in (None, "", [])}
+    if extras:
+        st.markdown("**Incident Details**")
+        for k, v in extras.items():
+            label = k.replace("_", " ").title()
+            if isinstance(v, list):
+                v = ", ".join(str(x) for x in v)
+            st.markdown(f"- **{label}:** {v}")
+
+    # ── Related recommendations ───────────────────────────────────────────────
+    related = [a for a in all_actions if "Jira" in a.get("sources", [])]
+    if not related:
+        related = all_actions[:3]           # fallback: show top 3
+
+    selected_recommendations: list[dict] = []
+    if related:
+        st.markdown("---")
+        st.markdown("**Recommendations** — select to include in approval")
+        for idx, a in enumerate(related):
+            ac   = _ACT_COL.get(a["priority"], "#94a3b8")
+            srcs = ", ".join(a.get("sources", []))
+            cb_col, card_col = st.columns([0.06, 0.94])
+            with cb_col:
+                checked = st.checkbox(
+                    label="select",
+                    key=f"dlg_rec_{ticket['id']}_{idx}",
+                    label_visibility="collapsed",
+                )
+            with card_col:
+                owner    = a.get("owner", "")
+                deadline = a.get("deadline", "")
+                why      = a.get("why", "")
+                steps    = a.get("steps", "")
+                owner_line    = f"<span style='color:#64748b;font-size:12px;'>👤 {owner}</span>&nbsp;&nbsp;" if owner else ""
+                deadline_line = f"<span style='color:#f59e0b;font-size:12px;'>⏱ {deadline}</span>" if deadline else ""
+                why_line   = f"<div style='font-size:13px;color:#94a3b8;margin-top:6px;'><b style='color:#c7d2fe;'>Why:</b> {why}</div>" if why else ""
+                steps_line = f"<div style='font-size:13px;color:#94a3b8;margin-top:4px;'><b style='color:#c7d2fe;'>Steps:</b> {steps}</div>" if steps else ""
+                st.markdown(f"""
+                <div style='border-left:4px solid {ac};padding:10px 14px;
+                            background:#12152a;border-radius:0 6px 6px 0;
+                            margin-bottom:4px;'>
+                    <div style='margin-bottom:4px;'>
+                        <span style='font-size:12px;font-weight:700;color:{ac};'>{a["priority"]}</span>
+                        &nbsp;·&nbsp;
+                        <span style='font-size:14px;font-weight:600;color:#e2e8f0;'>{a["title"]}</span>
+                    </div>
+                    <div style='margin-bottom:4px;'>{owner_line}{deadline_line}</div>
+                    {why_line}
+                    {steps_line}
+                    <div style='font-size:12px;color:#475569;margin-top:6px;'>Sources: {srcs}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            if checked:
+                selected_recommendations.append(a)
+
+    # ── Actions ───────────────────────────────────────────────────────────────
+    st.markdown("---")
+    approved_key = f"dlg_approved_{ticket['id']}"
+    if approved_key not in st.session_state:
+        st.session_state[approved_key] = False
+
+    if st.session_state[approved_key]:
+        # ── Post-approval confirmation ─────────────────────────────────────────
+        st.markdown(f"""
+        <div style='background:#052e16;border:1px solid #14532d;border-radius:10px;
+                    padding:20px 24px;margin-bottom:16px;'>
+            <div style='font-size:18px;font-weight:700;color:#22c55e;
+                        margin-bottom:14px;'>✅ Approval Actions Completed</div>
+            <div style='display:flex;flex-direction:column;gap:10px;'>
+                <div style='display:flex;align-items:center;gap:10px;'>
+                    <span style='font-size:20px;'>📧</span>
+                    <span style='font-size:14px;color:#86efac;font-weight:600;'>
+                        Email sent to Customer</span>
+                </div>
+                <div style='display:flex;align-items:center;gap:10px;'>
+                    <span style='font-size:20px;'>📋</span>
+                    <span style='font-size:14px;color:#86efac;font-weight:600;'>
+                        Executive Summary sent to Executive</span>
+                </div>
+                <div style='display:flex;align-items:center;gap:10px;'>
+                    <span style='font-size:20px;'>🔖</span>
+                    <span style='font-size:14px;color:#86efac;font-weight:600;'>
+                        Jira Status Updated</span>
+                </div>
+            </div>
+            <div style='font-size:12px;color:#4ade80;margin-top:14px;'>
+                Logged to outputs/override_log.jsonl &nbsp;·&nbsp;
+                {len(selected_recommendations)} recommendation(s) included
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("Close", use_container_width=True, key=f"dlg_close_{ticket['id']}"):
+            st.session_state[approved_key] = False
+            st.rerun()
+    else:
+        btn_approve, btn_edit, _ = st.columns([1, 1, 3])
+        with btn_approve:
+            if st.button("✓ Approve", type="primary", use_container_width=True,
+                         key=f"dlg_approve_{ticket['id']}"):
+                _e = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                      "dri": "dashboard", "item_type": "incident",
+                      "item_id": ticket["id"], "original": ticket["status"],
+                      "override": "approved",
+                      "approved_recommendations": [a["title"] for a in selected_recommendations],
+                      "comment": ""}
+                OUT_DIR.mkdir(exist_ok=True)
+                with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
+                    _f.write(json.dumps(_e) + "\n")
+                st.session_state[approved_key] = True
+        with btn_edit:
+            if st.button("✎ Edit", use_container_width=True,
+                         key=f"dlg_edit_{ticket['id']}"):
+                st.toast(f"Open Jira to edit {ticket['id']}", icon="✏️")
+
+
+# ── Audit Trail Dialog ────────────────────────────────────────────────────────
+@st.dialog("Audit Trail", width="large")
+def _audit_trail_dialog(ticket_id: str, log: list[dict]) -> None:
+    entries = [e for e in log if e.get("item_id") == ticket_id]
+
+    st.markdown(f"**Ticket:** `{ticket_id}`")
+    st.caption(f"{len(entries)} log entries found in outputs/override_log.jsonl")
+    st.divider()
+
+    if not entries:
+        st.info("No audit entries yet for this ticket. Approve or review it to create a log entry.")
+        return
+
+    for e in reversed(entries):        # newest first
+        ts        = e.get("timestamp", "")[:19].replace("T", " ") + " UTC"
+        override  = e.get("override", "").upper()
+        dri       = e.get("dri", "dashboard")
+        comment   = e.get("comment", "")
+        recs      = e.get("approved_recommendations", [])
+
+        badge_color = {"APPROVED": "#16a34a", "REJECTED": "#dc2626",
+                       "REVIEW": "#2563eb"}.get(override, "#475569")
+
+        st.markdown(
+            f"<div style='border-left:4px solid {badge_color};padding:10px 14px;"
+            f"background:#12152a;border-radius:0 6px 6px 0;margin-bottom:10px;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center;"
+            f"margin-bottom:6px;'>"
+            f"<span style='font-size:13px;font-weight:700;color:#fff;"
+            f"background:{badge_color};padding:2px 10px;border-radius:10px;'>{override}</span>"
+            f"<span style='font-size:12px;color:#64748b;'>{ts}</span></div>"
+            f"<div style='font-size:13px;color:#94a3b8;'>DRI: <b style='color:#e2e8f0;'>{dri}</b></div>"
+            + (f"<div style='font-size:13px;color:#94a3b8;margin-top:4px;'>Comment: {comment}</div>" if comment else "")
+            + (f"<div style='font-size:13px;color:#86efac;margin-top:4px;'>✅ Recommendations approved:<ul style='margin:4px 0 0 16px;'>"
+               + "".join(f"<li>{r}</li>" for r in recs) + "</ul></div>" if recs else "")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    if st.button("Close", use_container_width=True, key=f"audit_close_{ticket_id}"):
+        st.rerun()
+
+
 # Use identical column ratios for header and every data row so they align perfectly
-_COL_RATIOS = [1.2, 3.2, 1.0, 1.1, 2.4]
+_COL_RATIOS = [1.2, 3.2, 1.0, 1.1, 3.2]
 _HS = ("font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;"
        "color:#c7d2fe;padding:8px 4px 8px 0;border-bottom:2px solid #2d3150;"
        "display:block;")
@@ -293,23 +586,11 @@ for i, t in enumerate(jira["tickets"]):
         unsafe_allow_html=True,
     )
     with dc[4]:
-        ba, be, br = st.columns(3)
-        if ba.button("✓ Approve", key=f"approve_{t['id']}", use_container_width=True):
-            _e = {"timestamp": datetime.now(timezone.utc).isoformat(),
-                  "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
-                  "original": t["status"], "override": "approved", "comment": ""}
-            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
-                _f.write(json.dumps(_e) + "\n")
-            st.toast(f"{t['id']} approved", icon="✅")
-        if be.button("✎ Edit",   key=f"edit_{t['id']}",    use_container_width=True):
-            st.toast(f"Open Jira to edit {t['id']}", icon="✏️")
-        if br.button("✗ Reject", key=f"reject_{t['id']}",  use_container_width=True):
-            _e = {"timestamp": datetime.now(timezone.utc).isoformat(),
-                  "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
-                  "original": t["status"], "override": "rejected", "comment": ""}
-            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
-                _f.write(json.dumps(_e) + "\n")
-            st.toast(f"{t['id']} rejected", icon="❌")
+        btn_review, btn_audit = st.columns(2)
+        if btn_review.button("Review", key=f"review_{t['id']}", use_container_width=True):
+            _incident_review_dialog(t, live_actions)
+        if btn_audit.button("Audit Trail", key=f"audit_{t['id']}", use_container_width=True):
+            _audit_trail_dialog(t["id"], load_override_log())
 
     st.markdown("</div>", unsafe_allow_html=True)
 
@@ -318,682 +599,7 @@ st.markdown("<div style='border:1px solid #2d3150;border-top:none;border-radius:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CONSOLIDATED STATE PANEL
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### Consolidated Interim State")
-if consolidated_state:
-    cs = consolidated_state
-    sigs = cs.get("conflict_signals", {})
-    oi   = cs.get("orders_impact", {})
-    inc  = cs.get("incident", {})
-
-    _ts = cs.get("consolidated_at", "")[:19].replace("T", " ") + " UTC"
-
-    st.markdown(
-        "<div style='background:#12152a;border:1px solid #2d3150;border-radius:12px;"
-        "padding:14px 18px 10px;margin-bottom:4px;'>"
-        "<div style='font-size:11px;color:#64748b;margin-bottom:10px;'>"
-        "Merged from <b style='color:#c7d2fe'>" + str(cs.get("source_count", 7)) + " sources</b>"
-        " &nbsp;·&nbsp; Persisted to <code style='color:#818cf8'>outputs/consolidated_state.json</code>"
-        " &nbsp;·&nbsp; Generated: <span style='color:#94a3b8'>" + _ts + "</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    _cs1, _cs2, _cs3, _cs4 = st.columns(4)
-
-    def _sig_chip(label: str, active: bool, col) -> None:
-        bg  = "#7f1d1d" if active else "#0a2a0a"
-        fg  = "#fca5a5" if active else "#86efac"
-        bdr = "#be123c" if active else "#16a34a"
-        icon= "✗" if active else "✓"
-        col.markdown(
-            f"<div style='background:{bg};border:1px solid {bdr};border-radius:8px;"
-            f"padding:8px 10px;margin-bottom:6px;'>"
-            f"<div style='font-size:11px;font-weight:700;color:{fg};'>{icon} {label}</div>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-
-    _sig_chip("Status Mismatch",      sigs.get("status_mismatch", False),      _cs1)
-    _sig_chip("Order Count Mismatch", sigs.get("order_count_mismatch", False),  _cs2)
-    _sig_chip("Root Cause Mismatch",  sigs.get("root_cause_mismatch", False),   _cs3)
-    _sig_chip("Unassigned Critical",  sigs.get("unassigned_critical_ticket", False), _cs4)
-
-    _d1, _d2, _d3, _d4 = st.columns(4)
-    def _detail(label, val, col):
-        col.markdown(
-            f"<div style='background:#1a1d2e;border:1px solid #2d3150;border-radius:8px;"
-            f"padding:8px 10px;margin-bottom:6px;'>"
-            f"<div style='font-size:10px;color:#64748b;text-transform:uppercase;"
-            f"letter-spacing:.06em;'>{label}</div>"
-            f"<div style='font-size:14px;font-weight:700;color:#c7d2fe;margin-top:3px;'>{val}</div>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-
-    _detail("Order claims range",
-            f"{oi.get('min_claim','?')} – {oi.get('max_claim','?')}  (gap: {oi.get('gap','?')})",
-            _d1)
-    _detail("Start-time span",
-            f"{sigs.get('start_time_span_hours','?')} h across sources",
-            _d2)
-    _detail("Distinct root causes",
-            str(cs.get("root_cause", {}).get("distinct_claim_count", "?")),
-            _d3)
-    _detail("Current error rate",
-            f"{inc.get('current_error_rate_pct','?')}%  ({inc.get('current_status','')})",
-            _d4)
-
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    with st.expander("View full consolidated_state.json"):
-        st.json(cs)
-else:
-    st.info(
-        "Consolidated state not found. Run `python pipeline.py` to generate "
-        "`outputs/consolidated_state.json`.",
-        icon="ℹ️",
-    )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# KPI TILES
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### KPIs")
-k1, k2, k3, k4 = st.columns(4)
 
-with k1:
-    st.markdown("""
-    <div class='kpi-wrap' style='background:#0d2818;border-color:#14532d;border-top:3px solid #22c55e;'>
-        <div class='kpi-label'>Context Assembly</div>
-        <div class='kpi-before'>4–8 hrs manual</div>
-        <div class='kpi-val'>18ms</div>
-        <div class='kpi-sub' style='color:#22c55e;'>✓ Target &lt;5 min</div>
-    </div>""", unsafe_allow_html=True)
-
-with k2:
-    st.markdown("""
-    <div class='kpi-wrap' style='background:#0c1a3a;border-color:#1e3a5f;border-top:3px solid #3b82f6;'>
-        <div class='kpi-label'>Conflict Detection</div>
-        <div class='kpi-before'>1–2 hrs manual</div>
-        <div class='kpi-val'>4</div>
-        <div class='kpi-sub' style='color:#3b82f6;'>✓ &lt;30 sec &nbsp;·&nbsp; 2 HIGH, 2 MED</div>
-    </div>""", unsafe_allow_html=True)
-
-with k3:
-    st.markdown("""
-    <div class='kpi-wrap' style='background:#1a1200;border-color:#78350f;border-top:3px solid #f59e0b;'>
-        <div class='kpi-label'>Source Citation (Audit Trail)</div>
-        <div class='kpi-before'>0% — manual notes</div>
-        <div class='kpi-val'>100%</div>
-        <div class='kpi-sub' style='color:#f59e0b;'>✓ Every claim cited [Source]</div>
-    </div>""", unsafe_allow_html=True)
-
-with k4:
-    st.markdown("""
-    <div class='kpi-wrap' style='background:#1a0a2e;border-color:#4c1d95;border-top:3px solid #a855f7;'>
-        <div class='kpi-label'>Comms Clarity</div>
-        <div class='kpi-before'>Vague / no context</div>
-        <div class='kpi-val'>Before→After</div>
-        <div class='kpi-sub' style='color:#a855f7;'>✓ Cited · Conflicts · Actionable</div>
-    </div>""", unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ERROR RATE TIMELINE
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### Production Telemetry — Error Rate Timeline")
-
-timeline = telemetry["metrics"]["error_rate_timeline"]
-timestamps = [e["timestamp"][:16].replace("T", " ") for e in timeline]
-error_rates = [e["error_rate_pct"] for e in timeline]
-colors = ["#ef4444" if r > 10 else "#f59e0b" if r > 1 else "#22c55e" for r in error_rates]
-
-fig = go.Figure()
-fig.add_trace(go.Bar(
-    x=timestamps, y=error_rates,
-    marker_color=colors,
-    hovertemplate="<b>%{x}</b><br>Error rate: %{y}%<extra></extra>",
-))
-fig.add_hline(y=0.2, line_dash="dot", line_color="#64748b",
-              annotation_text="Baseline 0.2%", annotation_font_color="#64748b")
-fig.add_vrect(x0="2026-08-12 14:00", x1="2026-08-12 15:00",
-              fillcolor="#ef4444", opacity=0.15, line_width=0,
-              annotation_text="SEV-1", annotation_font_color="#fca5a5", annotation_position="top left")
-fig.add_vrect(x0="2026-08-14 16:00", x1="2026-08-14 17:00",
-              fillcolor="#22c55e", opacity=0.15, line_width=0,
-              annotation_text="Fix deployed", annotation_font_color="#86efac", annotation_position="top left")
-fig.update_layout(
-    paper_bgcolor="#1a1d2e", plot_bgcolor="#1a1d2e",
-    font=dict(color="#94a3b8", size=11),
-    margin=dict(l=40, r=20, t=20, b=60),
-    height=220,
-    xaxis=dict(showgrid=False, tickangle=-35, tickfont_size=9, color="#64748b"),
-    yaxis=dict(showgrid=True, gridcolor="#2d3150", title="Error Rate %", color="#64748b"),
-    bargap=0.2,
-)
-st.plotly_chart(fig, use_container_width=True)
-
-col_tl1, col_tl2, col_tl3 = st.columns(3)
-col_tl1.metric("Current Error Rate", f"{telemetry['metrics']['error_rate_timeline'][-1]['error_rate_pct']}%", delta="-50.9% from peak", delta_color="normal")
-col_tl2.metric("Peak Error Rate", "52.3%", "Aug 14 06:00 UTC")
-col_tl3.metric("Stuck Orders", str(telemetry["metrics"]["stuck_orders_count"]), "ORD-55892, ORD-55901")
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# GUARDRAILS PANEL  (step 3 — runs before analysis so analysis uses clean data)
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### Guardrails — Per-Artifact Fix Templates")
-st.caption("Step 3 in the pipeline: each artifact is validated against its fix template **before** conflict analysis runs. Auto-fixable issues are corrected; unfixable fields are flagged.")
-
-_gr_path = OUT_DIR / "guardrail_report.json"
-
-if _gr_path.exists():
-    _gr = json.loads(_gr_path.read_text(encoding="utf-8"))
-    _grs = _gr.get("summary", {})
-    _gr_ts = _gr.get("generated_at", "")[:19].replace("T", " ") + " UTC"
-
-    _STATUS_COLORS = {
-        "PASSED":  ("#16a34a", "#0a2a0a", "✓"),
-        "FIXED":   ("#d97706", "#2a1800", "⚠"),
-        "FLAGGED": ("#dc2626", "#2a0808", "✗"),
-    }
-
-    # Summary strip
-    _gr_all_pass = _grs.get("flagged", 1) == 0 and _grs.get("fixed", 0) == 0
-    _gr_banner_bg = "#0a2a0a" if _gr_all_pass else "#2a0808" if _grs.get("flagged", 0) else "#2a1800"
-    _gr_banner_bdr = "#16a34a" if _gr_all_pass else "#dc2626" if _grs.get("flagged", 0) else "#d97706"
-    _gr_banner_msg = "All artifacts passed — analysis running on fully validated data." if _gr_all_pass \
-        else f"{_grs.get('flagged',0)} artifact(s) flagged — analysis ran on guardrailed data; flagged fields noted below." \
-        if _grs.get("flagged", 0) else \
-        f"{_grs.get('fixed',0)} field(s) auto-fixed — analysis ran on corrected data."
-
-    st.markdown(
-        "<div style='background:" + _gr_banner_bg + ";border:1px solid " + _gr_banner_bdr + ";"
-        "border-radius:10px;padding:10px 16px;margin-bottom:12px;"
-        "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
-        "<div style='display:flex;gap:20px;align-items:center;'>"
-        "<span style='font-size:11px;color:#64748b;'>Generated: " + _gr_ts + "</span>"
-        "<span style='font-size:13px;font-weight:700;color:#16a34a;'>✓ " + str(_grs.get("passed",0)) + " PASSED</span>"
-        "<span style='font-size:13px;font-weight:700;color:#d97706;'>⚠ " + str(_grs.get("fixed",0)) + " FIXED</span>"
-        "<span style='font-size:13px;font-weight:700;color:#dc2626;'>✗ " + str(_grs.get("flagged",0)) + " FLAGGED</span>"
-        "</div>"
-        "<span style='font-size:11px;color:#94a3b8;font-style:italic;'>" + _gr_banner_msg + "</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
-
-    # One card per artifact — 4 columns, wrap to second row if needed
-    _gr_arts = _gr.get("artifacts", [])
-    _gr_row1 = _gr_arts[:4]
-    _gr_row2 = _gr_arts[4:]
-
-    def _render_gr_row(arts):
-        cols = st.columns(len(arts)) if arts else []
-        for _col, _art in zip(cols, arts):
-            _fc, _bg, _icon = _STATUS_COLORS.get(_art["status"], ("#64748b", "#1a1d2e", "?"))
-            _check_html = ""
-            for _c in _art.get("checks", []):
-                _cc, _, _ci = _STATUS_COLORS.get(_c["status"], ("#64748b", "", "?"))
-                _check_html += (
-                    f"<div style='display:flex;gap:6px;align-items:flex-start;padding:3px 0;"
-                    f"border-bottom:1px solid #1e293b;'>"
-                    f"<span style='color:{_cc};font-size:10px;flex-shrink:0;margin-top:1px;'>{_ci}</span>"
-                    f"<div><div style='font-size:10px;font-weight:600;color:#c7d2fe;'>{_c['field']}</div>"
-                    f"<div style='font-size:9px;color:#64748b;'>{_c['note']}</div></div></div>"
-                )
-            with _col:
-                st.markdown(
-                    f"<div style='background:{_bg};border:1.5px solid {_fc};"
-                    f"border-radius:10px;padding:10px 12px;margin-bottom:8px;'>"
-                    f"<div style='display:flex;justify-content:space-between;align-items:center;"
-                    f"margin-bottom:6px;'>"
-                    f"<span style='font-size:12px;font-weight:700;color:{_fc};'>{_icon} {_art['source']}</span>"
-                    f"<span style='font-size:10px;background:#12152a;border:1px solid {_fc};"
-                    f"color:{_fc};border-radius:20px;padding:1px 8px;font-weight:700;'>{_art['status']}</span>"
-                    f"</div>"
-                    f"<div style='font-size:10px;color:#94a3b8;margin-bottom:6px;'>"
-                    f"✓ {_art['passed']} &nbsp;⚠ {_art['fixed']} &nbsp;✗ {_art['flagged']}</div>"
-                    f"<div style='max-height:130px;overflow-y:auto;'>{_check_html}</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-
-    _render_gr_row(_gr_row1)
-    if _gr_row2:
-        _render_gr_row(_gr_row2)
-
-    with st.expander("View full guardrail_report.json"):
-        st.json(_gr)
-
-else:
-    st.info(
-        "Guardrail report not found. Run `python pipeline.py` to generate "
-        "`outputs/guardrail_report.json`.",
-        icon="ℹ️",
-    )
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFLICTS + RECOMMENDATIONS  (step 4 — runs on guardrailed artifacts)
-# ─────────────────────────────────────────────────────────────────────────────
-col_cf, col_rec = st.columns(2)
-
-with col_cf:
-    st.markdown("""
-    <div class='card'>
-    <div class='card-title'>Cross-Artifact Conflicts &nbsp;
-        <span class='badge badge-red'>2 HIGH</span>
-        <span class='badge badge-yellow'>2 MED</span>
-    </div>
-    <div class='conflict-high'>
-        <div class='conflict-title'>Timeline — Incident Start &nbsp; <span class='badge badge-red'>HIGH</span></div>
-        <div class='conflict-desc'>53-hour gap: Slack says Aug 11 18:00 UTC, Postmortem says Aug 13 23:00 UTC. Wrong start time = wrong root cause attribution.</div>
-        <div class='conflict-src'>Sources: Slack · Telemetry · Zendesk · Executive Email · Postmortem</div>
-    </div>
-    <div class='conflict-high'>
-        <div class='conflict-title'>Resolution Status &nbsp; <span class='badge badge-red'>HIGH</span></div>
-        <div class='conflict-desc'>Postmortem: RESOLVED (Aug 14 16:00). Zendesk/Slack/Telemetry/Jira: still OPEN — 1.4% error rate, NWAPI-3362 unassigned.</div>
-        <div class='conflict-src'>Sources: All 7 artifacts</div>
-    </div>
-    <div class='conflict-medium'>
-        <div class='conflict-title'>Impact — Orders Affected &nbsp; <span class='badge badge-yellow'>MED</span></div>
-        <div class='conflict-desc'>Range: 23 (Postmortem) → 31 (Telemetry) → 47 (Zendesk/Email) → 60+ (Slack/Jira). Spread of 37 orders — unreconciled.</div>
-        <div class='conflict-src'>Sources: Postmortem · Zendesk · Slack · Jira · Telemetry · Email</div>
-    </div>
-    <div class='conflict-medium'>
-        <div class='conflict-title'>Impact — Revenue at Risk &nbsp; <span class='badge badge-yellow'>MED</span></div>
-        <div class='conflict-desc'>$85K (Postmortem) vs $200K (Account Summary / Executive Email) — 2.4× gap. Affects SLA credits and goodwill decisions.</div>
-        <div class='conflict-src'>Sources: Postmortem · Account Summary · Executive Email</div>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_rec:
-    st.markdown("""
-    <div class='card'>
-    <div class='card-title'>Recommendations &nbsp;
-        <span class='badge badge-red'>3 P0</span>
-        <span class='badge badge-yellow'>2 P1</span>
-        <span class='badge badge-blue'>3 P2</span>
-    </div>
-    <div class='rec-card'>
-        <span class='badge badge-p0'>P0</span>
-        <div class='rec-title'>Fix stuck orders ORD-55892 &amp; ORD-55901</div>
-        <div class='rec-why'>Incident NOT resolved from customer view. Assign NWAPI-3362 immediately.</div>
-        <div class='rec-src'>[Zendesk ZD-98741] [Jira NWAPI-3362] [Slack]</div>
-    </div>
-    <div class='rec-card'>
-        <span class='badge badge-p0'>P0</span>
-        <div class='rec-title'>Send exec update to Derek Hartley (VP, Contoso)</div>
-        <div class='rec-why'>Last update Aug 13. CEO CC'd. Renewal threatened. Competitor eval active. EOD deadline.</div>
-        <div class='rec-src'>[Executive Email] [Account Summary ACC-00441]</div>
-    </div>
-    <div class='rec-card'>
-        <span class='badge badge-p0'>P0</span>
-        <div class='rec-title'>Audit ALL customers for stuck orders</div>
-        <div class='rec-why'>Postmortem: 3 enterprise accounts affected. Only Contoso has surfaced stuck orders so far.</div>
-        <div class='rec-src'>[Postmortem] [Slack] [Account Summary]</div>
-    </div>
-    <div class='rec-card'>
-        <span class='badge badge-p1'>P1</span>
-        <div class='rec-title'>Reconcile true order impact count</div>
-        <div class='rec-why'>Claims range 23–60+. Accurate number needed for SLA credit and customer comms.</div>
-        <div class='rec-src'>[Postmortem] [Zendesk] [Slack] [Jira] [Telemetry]</div>
-    </div>
-    <div class='rec-card'>
-        <span class='badge badge-p1'>P1</span>
-        <div class='rec-title'>Resolve root cause timeline discrepancy</div>
-        <div class='rec-why'>Slack/Telemetry say Aug 11; Postmortem says Aug 13. Wrong root cause = wrong fix.</div>
-        <div class='rec-src'>[Slack] [Postmortem] [Jira] [Telemetry]</div>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DRI REVIEW PANEL
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### DRI Review")
-st.caption("Review synthesized conflicts and action items, then submit your decisions to the audit trail.")
-
-# initialise session state buckets
-if "dri_submitted" not in st.session_state:
-    st.session_state.dri_submitted = False
-if "dri_log" not in st.session_state:
-    st.session_state.dri_log = []
-
-SEV_COLOR = {"HIGH": "#ef4444", "MEDIUM": "#f59e0b", "LOW": "#22c55e"}
-PRIO_COLOR = {"P0": "#fca5a5", "P1": "#fcd34d", "P2": "#93c5fd", "P3": "#c4b5fd"}
-
-dri_col, review_col = st.columns([1, 3])
-
-with dri_col:
-    st.markdown("""
-    <div class='card'>
-    <div class='card-title'>DRI Identity</div>
-    </div>
-    """, unsafe_allow_html=True)
-    dri_name = st.text_input("Your Name", placeholder="e.g. Laura Callahan", key="dri_name")
-    dri_role = st.selectbox("Role", ["CSM", "TAM", "Eng Lead", "VP Engineering", "VP Support", "Other"], key="dri_role")
-    dri_custom_role = ""
-    if dri_role == "Other":
-        dri_custom_role = st.text_input("Specify role", key="dri_custom_role")
-    effective_role = dri_custom_role if dri_role == "Other" else dri_role
-
-    st.markdown("""
-    <div class='card' style='margin-top:12px;'>
-    <div class='card-title'>Workflow Step</div>
-    <div style='font-size:13px;color:#94a3b8;line-height:1.9;'>
-        <span style='color:#22c55e;'>✓</span> Agent ingests 7 artifacts<br>
-        <span style='color:#22c55e;'>✓</span> Conflict detection<br>
-        <span style='color:#f59e0b;'>→</span> <b style='color:#e2e8f0;'>DRI review (you are here)</b><br>
-        <span style='color:#475569;'>○</span> Comms generated<br>
-        <span style='color:#475569;'>○</span> DRI approves &amp; sends
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with review_col:
-    with st.expander("Conflict Review", expanded=True):
-        conflict_decisions = {}
-        conflict_comments  = {}
-        for i, c in enumerate(live_conflicts):
-            sev   = c["severity"]
-            cat   = c["category"]
-            desc  = c["description"]
-            srcs  = ", ".join(c.get("sources", []))
-            color = SEV_COLOR.get(sev, "#94a3b8")
-
-            st.markdown(f"""
-            <div style='border-left:4px solid {color};padding:8px 12px;
-                        background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
-                <span style='font-size:12px;font-weight:700;color:{color};
-                             text-transform:uppercase;letter-spacing:.06em;'>{sev}</span>
-                &nbsp;·&nbsp;
-                <span style='font-size:15px;font-weight:600;color:#e2e8f0;'>{cat}</span><br>
-                <span style='font-size:13px;color:#94a3b8;'>{desc}</span><br>
-                <span style='font-size:12px;color:#475569;'>Sources: {srcs}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            d_col, c_col = st.columns([1, 2])
-            with d_col:
-                decision = st.radio(
-                    "Decision",
-                    ["Approve", "Reject", "Escalate"],
-                    horizontal=True,
-                    key=f"cf_decision_{i}",
-                    label_visibility="collapsed",
-                )
-            with c_col:
-                comment = st.text_input("Comment (optional)", key=f"cf_comment_{i}",
-                                        placeholder="Add context or override reason…",
-                                        label_visibility="collapsed")
-            conflict_decisions[i] = decision
-            conflict_comments[i]  = comment
-            st.markdown("---")
-
-    with st.expander("Action Item Review", expanded=True):
-        action_decisions = {}
-        action_comments  = {}
-        for i, a in enumerate(live_actions):
-            prio  = a["priority"]
-            title = a["title"]
-            srcs  = ", ".join(a.get("sources", []))
-            color = PRIO_COLOR.get(prio, "#94a3b8")
-
-            st.markdown(f"""
-            <div style='border-left:4px solid {color};padding:8px 12px;
-                        background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
-                <span style='font-size:12px;font-weight:700;color:{color};'>{prio}</span>
-                &nbsp;·&nbsp;
-                <span style='font-size:15px;font-weight:600;color:#e2e8f0;'>{title}</span><br>
-                <span style='font-size:12px;color:#475569;'>Sources: {srcs}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            d_col, c_col = st.columns([1, 2])
-            with d_col:
-                decision = st.radio(
-                    "Decision",
-                    ["Include", "Remove"],
-                    horizontal=True,
-                    key=f"ac_decision_{i}",
-                    label_visibility="collapsed",
-                )
-            with c_col:
-                comment = st.text_input("Comment (optional)", key=f"ac_comment_{i}",
-                                        placeholder="Reassign owner, change priority…",
-                                        label_visibility="collapsed")
-            action_decisions[i] = decision
-            action_comments[i]  = comment
-            st.markdown("---")
-
-    submit_col, status_col = st.columns([1, 3])
-    with submit_col:
-        submit_review = st.button("Submit Review", type="primary",
-                                  use_container_width=True, key="submit_dri")
-    with status_col:
-        if not dri_name:
-            st.warning("Enter your name above before submitting.")
-
-    if submit_review:
-        if not dri_name.strip():
-            st.error("DRI name is required.")
-        else:
-            log_path = OUT_DIR / "override_log.jsonl"
-            log_path.parent.mkdir(exist_ok=True)
-            ts = datetime.now(timezone.utc).isoformat()
-            entries = []
-
-            for i, c in enumerate(live_conflicts):
-                entry = {
-                    "timestamp": ts,
-                    "dri": f"{dri_name} ({effective_role})",
-                    "item_type": "conflict",
-                    "item_id": c["category"],
-                    "original": f"severity={c['severity']}, sources={','.join(c.get('sources',[]))}",
-                    "override": conflict_decisions[i].lower(),
-                    "comment": conflict_comments[i],
-                }
-                entries.append(entry)
-
-            for i, a in enumerate(live_actions):
-                entry = {
-                    "timestamp": ts,
-                    "dri": f"{dri_name} ({effective_role})",
-                    "item_type": "action",
-                    "item_id": a["title"][:50],
-                    "original": f"priority={a['priority']}, sources={','.join(a.get('sources',[]))}",
-                    "override": action_decisions[i].lower(),
-                    "comment": action_comments[i],
-                }
-                entries.append(entry)
-
-            with open(log_path, "a", encoding="utf-8") as f:
-                for e in entries:
-                    f.write(json.dumps(e) + "\n")
-
-            approved_cf = sum(1 for d in conflict_decisions.values() if d == "Approve")
-            rejected_cf = sum(1 for d in conflict_decisions.values() if d == "Reject")
-            escalated_cf = sum(1 for d in conflict_decisions.values() if d == "Escalate")
-            included_ac = sum(1 for d in action_decisions.values() if d == "Include")
-            removed_ac  = sum(1 for d in action_decisions.values() if d == "Remove")
-
-            st.session_state.dri_submitted = True
-            st.session_state.dri_log = entries
-            st.success(
-                f"Review submitted by **{dri_name}** ({effective_role}) at {ts[:19]} UTC.  \n"
-                f"Conflicts: {approved_cf} approved · {rejected_cf} rejected · {escalated_cf} escalated  \n"
-                f"Actions: {included_ac} included · {removed_ac} removed  \n"
-                f"Logged to `outputs/override_log.jsonl`"
-            )
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ACCOUNT HEALTH + HITL
-# ─────────────────────────────────────────────────────────────────────────────
-col_acc, col_hitl = st.columns(2)
-
-with col_acc:
-    inc = account["current_incident"]
-    hist = account["support_history_90d"]
-    a1, a2, a3, a4 = st.columns(4)
-    a1.metric("Health Score", f"{account['health_score']}/100", delta="Declining", delta_color="inverse")
-    a2.metric("NPS Score", f"{account['nps_score']}/10")
-    a3.metric("SLA Breaches", str(hist["sla_breaches"]), delta="90 days", delta_color="inverse")
-    a4.metric("Revenue at Risk", f"${inc['estimated_revenue_at_risk_usd']:,}")
-
-    st.markdown(f"""
-    <div class='card'>
-    <div class='card-title'>Account — {account['company_name']}</div>
-    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
-        <b style='color:#e2e8f0;'>Contract:</b> ${account['contract_value_usd_annual']:,}/year &nbsp;·&nbsp;
-        <b style='color:#e2e8f0;'>Renewal:</b> {account['renewal_date']}<br>
-        <b style='color:#e2e8f0;'>Exec contact:</b> Derek Hartley (VP Procurement)<br>
-        <b style='color:#e2e8f0;'>Last exec update:</b>
-            <span style='color:#ef4444;'>2026-08-13 — OVERDUE (6 days ago)</span><br>
-        <b style='color:#e2e8f0;'>Open tickets (90d):</b> {hist['total_tickets']} total · {hist['urgent_tickets']} urgent<br>
-        <b style='color:#e2e8f0;'>Competitor eval:</b>
-            <span style='color:#ef4444;'>ACTIVE — per executive email</span><br>
-        <b style='color:#e2e8f0;'>Intl error rate:</b> 2.4% &nbsp;·&nbsp;
-        <b style='color:#e2e8f0;'>Domestic:</b> 0.1%
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-with col_hitl:
-    high_count   = sum(1 for e in override_log if "high"   in e.get("override",""))
-    medium_count = sum(1 for e in override_log if "medium" in e.get("override",""))
-    uncertain    = sum(1 for e in override_log if "uncertain" in e.get("override",""))
-
-    h1, h2, h3 = st.columns(3)
-    h1.metric("HIGH Confidence", high_count)
-    h2.metric("MED Confidence",  medium_count)
-    h3.metric("Flagged Uncertain", uncertain)
-
-    audit_html = "<div class='card'><div class='card-title'>HITL Audit Trail — override_log.jsonl</div>"
-    for entry in override_log[:7]:
-        css = "audit-high" if "high" in entry["override"] else "audit-medium" if "medium" in entry["override"] else "audit-medium"
-        item_id = entry["item_id"][:45]
-        conf    = entry["original"].split(",")[0].replace("confidence=","")
-        score   = entry["original"].split(",")[1].replace(" score=","").strip() if "score" in entry["original"] else ""
-        override = entry["override"]
-        audit_html += f"<div class='audit-row {css}'>{entry['item_type']} · {item_id} · {conf} {score} · {override}</div>"
-    if len(override_log) > 7:
-        audit_html += f"<div style='font-size:12px;color:#475569;margin-top:5px;'>+ {len(override_log)-7} more entries</div>"
-    audit_html += "</div>"
-    st.markdown(audit_html, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# BEFORE / AFTER
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### Comms Clarity — Before vs After")
-ba1, ba2 = st.columns(2)
-
-with ba1:
-    st.markdown("""
-    <div class='ba-before'>
-        <div class='ba-label'>BEFORE — Manual Triage (4–8 hours)</div>
-        <div class='ba-text'>
-            "Customer reports order processing failures. Engineering says fixed.
-            Need to investigate further."
-        </div>
-        <br>
-        <span class='badge badge-red'>✗ Vague</span>
-        <span class='badge badge-red'>✗ No sources</span>
-        <span class='badge badge-red'>✗ No conflicts</span>
-        <span class='badge badge-red'>✗ No actions</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-with ba2:
-    st.markdown("""
-    <div class='ba-after'>
-        <div class='ba-label'>AFTER — Synthesizer (18ms total)</div>
-        <div class='ba-text'>
-            "Contoso Ltd | 2 SLA breaches [Account Summary].
-            Postmortem: RESOLVED. Customer: NOT RESOLVED [Zendesk/Email].
-            Error rate 1.4% vs 0.2% baseline [Telemetry].
-            2 critical Jira tickets open. NWAPI-3362 unassigned.
-            VP Derek Hartley threatening non-renewal + competitor evaluation [Email].
-            Recommended: assign NWAPI-3362, send exec update, run order cleanup."
-        </div>
-        <br>
-        <span class='badge badge-green'>✓ Specific</span>
-        <span class='badge badge-green'>✓ Cited</span>
-        <span class='badge badge-green'>✓ Conflicts flagged</span>
-        <span class='badge badge-green'>✓ HITL reviewed</span>
-        <span class='badge badge-green'>✓ Actionable</span>
-    </div>
-    """, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CUSTOMER EMAIL OUTPUT
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### Customer Update Email")
-st.caption("Generated by the pipeline — `outputs/customer_email.md`. Non-technical, <2 min read. Run `python pipeline.py` to regenerate.")
-
-email_path = OUT_DIR / "customer_email.md"
-
-ec1, ec2 = st.columns([3, 1])
-
-with ec1:
-    if email_path.exists():
-        email_content = email_path.read_text(encoding="utf-8")
-        st.markdown(email_content)
-    else:
-        st.info("outputs/customer_email.md not found. Run `python pipeline.py` to generate all output reports including the customer email.")
-
-with ec2:
-    renewal = account["renewal_date"]
-    st.markdown(f"""
-    <div class='card'>
-    <div class='card-title'>Customer Summary &lt;2 min</div>
-    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
-        <b style='color:#e2e8f0;'>What we're seeing:</b><br>
-        Intermittent failures on international orders only. Domestic unaffected.<br><br>
-        <b style='color:#e2e8f0;'>What we've already changed:</b><br>
-        Connection pool fix deployed Aug 14. Error rate down from 52% peak to 1.4%.<br><br>
-        <b style='color:#e2e8f0;'>What we think is most likely:</b><br>
-        Intl pool size (50) vs domestic (200) + Aug 13 migration compounded the gap.<br><br>
-        <b style='color:#e2e8f0;'>What we're doing next:</b><br>
-        Resolving ORD-55892 &amp; ORD-55901; auditing all enterprise accounts; corrected RCA by EOD.<br><br>
-        <b style='color:#e2e8f0;'>Next update:</b><br>
-        EOD today with named owners &amp; resolved order count.
-    </div>
-    </div>
-    <div class='card'>
-    <div class='card-title'>Recipient Context</div>
-    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
-        <b style='color:#e2e8f0;'>To:</b> Derek Hartley (VP Procurement)<br>
-        <b style='color:#e2e8f0;'>CC:</b> Margaret Peacock (Ops), CSM<br>
-        <b style='color:#e2e8f0;'>Tone:</b> Urgent · Exec-level · Non-technical<br>
-        <b style='color:#e2e8f0;'>Last update:</b>
-            <span style='color:#ef4444;'>2026-08-13 — 6 days overdue</span><br>
-        <b style='color:#e2e8f0;'>Renewal:</b> {renewal} · HIGH risk<br>
-        <b style='color:#e2e8f0;'>Competitor eval:</b>
-            <span style='color:#ef4444;'>ACTIVE</span>
-    </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# FOOTER
-# ─────────────────────────────────────────────────────────────────────────────
-st.divider()
-st.markdown(
-    "<div style='text-align:center;font-size:13px;color:#475569;'>"
-    "Northwind Escalation Synthesizer &nbsp;·&nbsp; "
-    "Sources: Zendesk · Slack · Postmortem · Telemetry · Account Summary · Jira · Executive Email &nbsp;·&nbsp; "
-    "Powered by Claude claude-opus-5"
-    "</div>",
-    unsafe_allow_html=True,
-)

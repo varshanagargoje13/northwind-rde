@@ -295,12 +295,16 @@ the customer relationship."""
 
 
 def run_agentic_analysis(
-    artifacts: list[dict],
-    schemas: dict[str, dict],
+    artifacts:        list[dict],
+    schemas:          dict[str, dict],
+    ontology_facts:   str = "",
+    sparql_conflicts: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict], list[dict]]:
     """
     Phase 1: Claude reads artifact schemas then data, calls tools to register
     schema violations, conflicts, and action items.
+    When ontology_facts are provided the 6-layer context router is used;
+    otherwise falls back to the flat _build_artifact_context prompt.
     Returns (conflicts, action_items, schema_violations).
     """
     global _current_conflicts, _current_actions, _current_schema_violations
@@ -308,8 +312,16 @@ def run_agentic_analysis(
     _current_actions          = []
     _current_schema_violations = []
 
-    client  = anthropic.Anthropic()
-    context = _build_artifact_context(artifacts, schemas)
+    client = anthropic.Anthropic()
+
+    if ontology_facts:
+        from .context.router import route_analysis as _route
+        context = _route(
+            artifacts, schemas, ontology_facts, sparql_conflicts or [],
+            out_dir=None,
+        )
+    else:
+        context = _build_artifact_context(artifacts, schemas)
 
     n_schemas = len(schemas)
     print(
@@ -332,17 +344,33 @@ def run_agentic_analysis(
         }
     ]
 
-    runner = client.beta.messages.tool_runner(
-        model=MODEL,
-        max_tokens=16000,
-        thinking={"type": "adaptive"},
-        tools=[flag_schema_violation, flag_conflict, add_action_item],
-        system=cached_system,
-        messages=cached_messages,
-    )
-
-    for _ in runner:
-        pass  # Tool Runner drives the loop
+    try:
+        runner = client.beta.messages.tool_runner(
+            model=MODEL,
+            max_tokens=16000,
+            thinking={"type": "adaptive"},
+            tools=[flag_schema_violation, flag_conflict, add_action_item],
+            system=cached_system,
+            messages=cached_messages,
+        )
+        for _ in runner:
+            pass  # Tool Runner drives the loop
+    except anthropic.AuthenticationError as exc:
+        raise anthropic.AuthenticationError(
+            "ANTHROPIC_API_KEY is invalid or missing."
+        ) from exc
+    except anthropic.RateLimitError as exc:
+        raise RuntimeError(
+            f"Claude API rate limit reached during agentic analysis: {exc}"
+        ) from exc
+    except anthropic.APIConnectionError as exc:
+        raise RuntimeError(
+            f"Could not connect to Claude API during agentic analysis: {exc}"
+        ) from exc
+    except anthropic.APIStatusError as exc:
+        raise RuntimeError(
+            f"Claude API returned error {exc.status_code} during agentic analysis: {exc.message}"
+        ) from exc
 
     conflicts  = list(_current_conflicts)
     actions    = list(_current_actions)
@@ -377,23 +405,36 @@ def _stream_report(
     """
     print(f"  Streaming [{label}]...", end=" ", flush=True)
     full_text = ""
-    with client.messages.stream(
-        model=MODEL,
-        max_tokens=8000,
-        thinking={"type": "adaptive"},
-        system=_CACHED_REPORT_SYSTEM,
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    cached_ctx_block,                         # cached — free on calls 2 & 3
-                    {"type": "text", "text": report_prompt},  # unique per report
-                ],
-            }
-        ],
-    ) as stream:
-        for text in stream.text_stream:
-            full_text += text
+    try:
+        with client.messages.stream(
+            model=MODEL,
+            max_tokens=8000,
+            thinking={"type": "adaptive"},
+            system=_CACHED_REPORT_SYSTEM,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        cached_ctx_block,                         # cached — free on calls 2 & 3
+                        {"type": "text", "text": report_prompt},  # unique per report
+                    ],
+                }
+            ],
+        ) as stream:
+            for text in stream.text_stream:
+                full_text += text
+    except anthropic.RateLimitError as exc:
+        raise RuntimeError(
+            f"Rate limit reached while streaming [{label}]: {exc}"
+        ) from exc
+    except anthropic.APIConnectionError as exc:
+        raise RuntimeError(
+            f"Connection lost while streaming [{label}]: {exc}"
+        ) from exc
+    except anthropic.APIStatusError as exc:
+        raise RuntimeError(
+            f"API error {exc.status_code} while streaming [{label}]: {exc.message}"
+        ) from exc
     print(f"done ({len(full_text):,} chars)", flush=True)
     return full_text
 
@@ -512,9 +553,17 @@ End with a 'Conflict-Driven Items' section noting which actions exist specifical
 because of cross-source conflicts. Cite every source."""
 
     print("\n  Generating 3 reports via streaming (ctx cached across calls):\n", flush=True)
-    exec_summary    = _stream_report(client, cached_ctx_block, exec_prompt,     "Executive Summary")
-    conflict_report = _stream_report(client, cached_ctx_block, conflict_prompt, "Conflict Report")
-    action_items    = _stream_report(client, cached_ctx_block, action_prompt,   "Action Items")
+
+    def _safe_stream(prompt: str, label: str, fallback_heading: str) -> str:
+        try:
+            return _stream_report(client, cached_ctx_block, prompt, label)
+        except RuntimeError as exc:
+            print(f"\n  [WARN] {label} streaming failed: {exc}", flush=True)
+            return f"# {fallback_heading}\n\n*Report generation failed: {exc}*\n"
+
+    exec_summary    = _safe_stream(exec_prompt,     "Executive Summary", "Executive Escalation Summary")
+    conflict_report = _safe_stream(conflict_prompt, "Conflict Report",   "Conflict Report")
+    action_items    = _safe_stream(action_prompt,   "Action Items",      "Prioritized Action Items")
 
     return exec_summary, conflict_report, action_items
 
@@ -522,15 +571,19 @@ because of cross-source conflicts. Cite every source."""
 # ── Public entry point ─────────────────────────────────────────────────────────
 
 def synthesize(
-    artifacts: list[dict],
-    data_dir: Path | None = None,
+    artifacts:        list[dict],
+    data_dir:         Path | None = None,
+    knowledge_graph=None,
+    sparql_conflicts: list[dict] | None = None,
 ) -> tuple[list[dict], list[dict], str, str, str]:
     """
-    Full two-phase schema-aware AI synthesis.
+    Full two-phase schema-aware AI synthesis with optional ontology context.
 
     Phase 1: Loads JSON schemas from data_dir/schema/, then runs the agentic loop —
              Claude validates each artifact against its schema, flags cross-source
-             conflicts, and surfaces action items.
+             conflicts, and surfaces action items.  When knowledge_graph is supplied,
+             the 6-layer context router is used and SPARQL-derived ontology facts
+             are injected as Layer 2.
     Phase 2: Three streaming report calls using cached context.
 
     Returns (conflicts, actions, executive_summary, conflict_report, action_items).
@@ -544,7 +597,18 @@ def synthesize(
     else:
         print("  [WARN] No schemas found — schema validation step will be skipped.", flush=True)
 
-    conflicts, actions, violations = run_agentic_analysis(artifacts, schemas)
+    ontology_facts = ""
+    if knowledge_graph is not None:
+        try:
+            from .ontology.sparql_detector import extract_facts
+            ontology_facts = extract_facts(knowledge_graph)
+            print(f"  Ontology facts extracted ({len(ontology_facts):,} chars)", flush=True)
+        except Exception as exc:
+            print(f"  [WARN] Ontology fact extraction failed: {exc}", flush=True)
+
+    conflicts, actions, violations = run_agentic_analysis(
+        artifacts, schemas, ontology_facts, sparql_conflicts
+    )
 
     if violations:
         print(

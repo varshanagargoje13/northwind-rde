@@ -1,0 +1,144 @@
+@prefix nw:   <http://northwind.io/escalation#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Ontology declaration ───────────────────────────────────────────────────────
+<http://northwind.io/escalation> a owl:Ontology ;
+    rdfs:label   "Northwind Escalation Ontology" ;
+    rdfs:comment "Domain model for customer escalation incident analysis. Provides formal semantics for conflict detection via OWL reasoning and SPARQL queries." .
+
+# ── Classes ────────────────────────────────────────────────────────────────────
+nw:Incident a owl:Class ;
+    rdfs:label   "Incident" ;
+    rdfs:comment "A customer-impacting service incident with multiple contributing artifact sources." .
+
+nw:Artifact a owl:Class ;
+    rdfs:label   "Artifact" ;
+    rdfs:comment "A data source (Zendesk, Slack, Postmortem, Telemetry, Account Summary, Jira, Executive Email) contributing claims about an incident." .
+
+nw:Order a owl:Class ;
+    rdfs:label   "Order" ;
+    rdfs:comment "A customer order affected by or stuck during the incident." .
+
+nw:Customer a owl:Class ;
+    rdfs:label   "Customer" ;
+    rdfs:comment "An enterprise customer affected by or escalating the incident." .
+
+nw:RootCause a owl:Class ;
+    rdfs:label   "RootCause" ;
+    rdfs:comment "A claimed root cause of the incident as asserted by one artifact source." .
+
+nw:IncidentStatus a owl:Class ;
+    rdfs:label   "IncidentStatus" ;
+    rdfs:comment "The resolution state of an incident as claimed by a specific artifact source." .
+
+nw:Conflict a owl:Class ;
+    rdfs:label   "Conflict" ;
+    rdfs:comment "A detected factual contradiction between two or more artifact sources." .
+
+# ── Status individuals ─────────────────────────────────────────────────────────
+nw:Open      a nw:IncidentStatus ; rdfs:label "Open" .
+nw:Resolved  a nw:IncidentStatus ; rdfs:label "Resolved" .
+nw:Degraded  a nw:IncidentStatus ; rdfs:label "Degraded" .
+nw:Mitigated a nw:IncidentStatus ; rdfs:label "Mitigated" .
+
+# KEY OWL CONSTRAINT: Open and Resolved are mutually exclusive.
+# The OWL-RL reasoner will flag any artifact asserting both statuses as inconsistent.
+nw:Open owl:disjointWith nw:Resolved .
+
+# ── Object properties ──────────────────────────────────────────────────────────
+nw:hasArtifact a owl:ObjectProperty ;
+    rdfs:domain nw:Incident ; rdfs:range nw:Artifact ;
+    rdfs:label  "hasArtifact" ;
+    rdfs:comment "Links an incident to one of its data artifact sources." .
+
+nw:claimsStatus a owl:ObjectProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range nw:IncidentStatus ;
+    rdfs:label  "claimsStatus" ;
+    rdfs:comment "The resolution status (Open/Resolved/Degraded/Mitigated) as asserted by this artifact." .
+
+nw:claimsRootCause a owl:ObjectProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range nw:RootCause ;
+    rdfs:label  "claimsRootCause" ;
+    rdfs:comment "A root cause hypothesis asserted by this artifact." .
+
+nw:affectsOrder a owl:ObjectProperty ;
+    rdfs:domain nw:Incident ; rdfs:range nw:Order ;
+    rdfs:label  "affectsOrder" ;
+    rdfs:comment "Links an incident to a known affected customer order." .
+
+nw:reportedBy a owl:ObjectProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range nw:Customer ;
+    rdfs:label  "reportedBy" ;
+    rdfs:comment "The customer that filed or is associated with this artifact." .
+
+nw:hasConflict a owl:ObjectProperty ;
+    rdfs:domain nw:Incident ; rdfs:range nw:Conflict ;
+    rdfs:label  "hasConflict" ;
+    rdfs:comment "Links an incident to a detected cross-source conflict." .
+
+# ── Data properties ────────────────────────────────────────────────────────────
+nw:incidentId a owl:DatatypeProperty ;
+    rdfs:domain nw:Incident ; rdfs:range xsd:string ;
+    rdfs:label  "incidentId" .
+
+nw:sourceName a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:string ;
+    rdfs:label  "sourceName" .
+
+nw:ordersAffectedClaim a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:integer ;
+    rdfs:label  "ordersAffectedClaim" ;
+    rdfs:comment "Number of orders the artifact claims are affected." .
+
+nw:startTimeClaim a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:dateTime ;
+    rdfs:label  "startTimeClaim" ;
+    rdfs:comment "Incident start timestamp as asserted by this artifact." .
+
+nw:revenueAtRiskUSD a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:decimal ;
+    rdfs:label  "revenueAtRiskUSD" .
+
+nw:errorRatePct a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:decimal ;
+    rdfs:label  "errorRatePct" .
+
+nw:slaBreached a owl:DatatypeProperty ;
+    rdfs:domain nw:Artifact ; rdfs:range xsd:boolean ;
+    rdfs:label  "slaBreached" .
+
+nw:renewalThreat a owl:DatatypeProperty ;
+    rdfs:domain nw:Customer ; rdfs:range xsd:boolean ;
+    rdfs:label  "renewalThreat" .
+
+nw:healthScore a owl:DatatypeProperty ;
+    rdfs:domain nw:Customer ; rdfs:range xsd:integer ;
+    rdfs:label  "healthScore" .
+
+nw:npsScore a owl:DatatypeProperty ;
+    rdfs:domain nw:Customer ; rdfs:range xsd:decimal ;
+    rdfs:label  "npsScore" .
+
+nw:rootCauseText a owl:DatatypeProperty ;
+    rdfs:domain nw:RootCause ; rdfs:range xsd:string ;
+    rdfs:label  "rootCauseText" .
+
+nw:orderId a owl:DatatypeProperty ;
+    rdfs:domain nw:Order ; rdfs:range xsd:string ;
+    rdfs:label  "orderId" .
+
+nw:orderStatus a owl:DatatypeProperty ;
+    rdfs:domain nw:Order ; rdfs:range xsd:string ;
+    rdfs:label  "orderStatus" .
+
+nw:conflictCategory a owl:DatatypeProperty ;
+    rdfs:domain nw:Conflict ; rdfs:range xsd:string .
+
+nw:conflictSeverity a owl:DatatypeProperty ;
+    rdfs:domain nw:Conflict ; rdfs:range xsd:string .
+
+nw:conflictDescription a owl:DatatypeProperty ;
+    rdfs:domain nw:Conflict ; rdfs:range xsd:string .
