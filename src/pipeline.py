@@ -3,10 +3,12 @@ Northwind Escalation Synthesizer — core pipeline orchestration.
 
 Steps:
   1. Load 7 artifacts
-  2. AI or rule-based conflict detection
-  3. Human-in-the-Loop (HITL) confidence review
-  4. Write 3 output reports
-  5. Print before/after summary + timing
+  2. Consolidate all sources → outputs/consolidated_state.json  (interim state)
+  3. Guardrails — per-artifact fix templates → outputs/guardrail_report.json
+  4. AI or rule-based conflict detection  (on guardrailed artifacts)
+  5. Human-in-the-Loop (HITL) confidence review
+  6. Write output reports
+  7. Print before/after summary + timing
 """
 
 import os
@@ -19,6 +21,8 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from .loaders import load_all
+from .consolidator import consolidate, save as save_consolidated_state
+from .guardrails import apply_all as apply_guardrails, save_report as save_guardrail_report
 from .conflict_detector import detect_all
 from .report_generator import (
     generate_executive_summary,
@@ -69,17 +73,68 @@ def run() -> None:
     for a in artifacts:
         print(f"  [OK]  [{a['source']:16s}]  {a['file']}")
 
-    # ── Step 2: AI or rule-based analysis ─────────────────────────────────────
+    # ── Step 2: Consolidate — merge and persist interim state ──────────────────
+    _section("Step 2 -- Consolidating 7 sources → interim state")
+    state = consolidate(artifacts)
+    state_path = save_consolidated_state(state, OUT_DIR)
+
+    sigs = state["conflict_signals"]
+    print(f"  [OK]  Consolidated state saved  →  outputs/consolidated_state.json")
+    print(f"\n  Interim state summary:")
+    print(f"    Sources merged      : {state['source_count']}")
+    print(f"    Orders claims range : "
+          f"{state['orders_impact']['min_claim']} – {state['orders_impact']['max_claim']} "
+          f"(gap: {state['orders_impact']['gap']})")
+    print(f"    Start-time span     : {sigs['start_time_span_hours']}h across sources")
+    print(f"    Distinct root causes: {state['root_cause']['distinct_claim_count']}")
+    print(f"    Conflict signals    : "
+          + ("  ".join(
+              f"{YELLOW if v else GREEN}{'✗' if v else '✓'} {k}{RESET}"
+              for k, v in sigs.items() if isinstance(v, bool)
+          )))
+    t2 = time.perf_counter()
+
+    # ── Step 3: Guardrails — per-artifact fix templates ───────────────────────
+    _section("Step 3 -- Guardrails (per-artifact fix templates)")
+    artifacts, gr_results = apply_guardrails(artifacts)
+    gr_path = save_guardrail_report(gr_results, OUT_DIR)
+
+    gr_passed  = sum(1 for r in gr_results if r.status == "PASSED")
+    gr_fixed   = sum(1 for r in gr_results if r.status == "FIXED")
+    gr_flagged = sum(1 for r in gr_results if r.status == "FLAGGED")
+
+    for r in gr_results:
+        icon  = f"{GREEN}✓ PASSED {RESET}" if r.status == "PASSED" \
+                else f"{YELLOW}⚠ FIXED  {RESET}" if r.status == "FIXED" \
+                else f"{RED}✗ FLAGGED{RESET}"
+        fchk  = [c for c in r.checks if c.status == "FLAGGED"]
+        extra = f"  {RED}→ {fchk[0].field}: {fchk[0].note}{RESET}" if fchk else ""
+        print(f"  {icon}  [{r.source:<16s}]  "
+              f"{r.n_passed} passed · {r.n_fixed} fixed · {r.n_flagged} flagged{extra}")
+
+    print(f"\n  Summary: {GREEN}{gr_passed} PASSED{RESET} · "
+          f"{YELLOW}{gr_fixed} FIXED{RESET} · {RED}{gr_flagged} FLAGGED{RESET}")
+    print(f"  Report : outputs/guardrail_report.json")
+    if gr_flagged:
+        print(f"\n  {YELLOW}[WARN] {gr_flagged} artifact(s) flagged — "
+              f"analysis will proceed on guardrailed data; flagged fields noted in report.{RESET}")
+    else:
+        print(f"\n  {GREEN}[OK] All artifacts passed/fixed — analysis proceeds on clean data.{RESET}")
+    t3 = time.perf_counter()
+
+    # ── Step 4: AI or rule-based analysis  (on guardrailed artifacts) ─────────
     api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     use_ai  = bool(api_key)
 
     if use_ai:
-        _section("Step 2 -- AI Analysis  (claude-opus-5 + Tool Runner)")
-        print(f"  {CYAN}Mode: Claude AI (agentic tool use + streaming){RESET}\n")
+        _section("Step 4 -- AI Analysis  (claude-opus-5 + Tool Runner + Schema Validation)")
+        print(f"  {CYAN}Mode: Claude AI (schema-aware agentic tool use + streaming){RESET}")
+        print(f"  {DIM}Input: guardrailed artifacts ({gr_passed} passed · {gr_fixed} fixed · {gr_flagged} flagged){RESET}")
+        print(f"  {DIM}Schemas: data/schema/ (7 JSON Schema Draft-07 files){RESET}\n")
         try:
             from .ai_synthesizer import synthesize
-            ai_conflicts, ai_actions, exec_md, conflict_md, actions_md = synthesize(artifacts)
-            t2 = time.perf_counter()
+            ai_conflicts, ai_actions, exec_md, conflict_md, actions_md = synthesize(artifacts, DATA_DIR)
+            t4 = time.perf_counter()
             rule_conflicts = detect_all(artifacts)
             print(f"\n  AI detected {len(ai_conflicts)} conflicts, {len(ai_actions)} actions")
             print(f"  Rule-based detected {len(rule_conflicts)} conflicts (cross-check)")
@@ -98,10 +153,11 @@ def run() -> None:
             use_ai = False
 
     if not use_ai:
-        _section("Step 2 -- Rule-based conflict detection")
-        print(f"  {YELLOW}Mode: Rule-based (set ANTHROPIC_API_KEY to enable Claude AI){RESET}\n")
+        _section("Step 4 -- Rule-based conflict detection")
+        print(f"  {YELLOW}Mode: Rule-based (set ANTHROPIC_API_KEY to enable Claude AI){RESET}")
+        print(f"  {DIM}Input: guardrailed artifacts ({gr_passed} passed · {gr_fixed} fixed · {gr_flagged} flagged){RESET}\n")
         conflicts = detect_all(artifacts)
-        t2 = time.perf_counter()
+        t4 = time.perf_counter()
 
         # Build simple action list for HITL scoring (rule-based fallback)
         actions = [
@@ -145,8 +201,8 @@ def run() -> None:
             ("customer_email.md",    customer_email_md),
         ]
 
-    # ── Step 3: HITL confidence review ────────────────────────────────────────
-    _section("Step 3 -- Human-in-the-Loop (HITL) Review")
+    # ── Step 5: HITL confidence review ────────────────────────────────────────
+    _section("Step 5 -- Human-in-the-Loop (HITL) Review")
 
     conflict_dicts = [
         {"category": c.category, "severity": c.severity, "sources": c.sources,
@@ -157,19 +213,21 @@ def run() -> None:
     c_signals, a_signals = build_confidence_signals(conflict_dicts, actions)
     dri_result = dri_review(conflict_dicts, actions, c_signals, a_signals)
 
-    t3 = time.perf_counter()
+    t5 = time.perf_counter()
 
-    # ── Step 4: Write output reports ───────────────────────────────────────────
-    _section("Step 4 -- Writing 4 output reports")
+    # ── Step 6: Write output reports ───────────────────────────────────────────
+    _section("Step 6 -- Writing 5 output reports")
     OUT_DIR.mkdir(exist_ok=True)
     for filename, content in outputs:
         path = OUT_DIR / filename
         path.write_text(content, encoding="utf-8")
         print(f"  [DONE]  outputs/{filename}  ({content.count(chr(10))} lines)")
+    print(f"  [DONE]  outputs/guardrail_report.json  (written at step 3)")
+    print(f"  [DONE]  outputs/consolidated_state.json  (written at step 2)")
 
-    t4 = time.perf_counter()
+    t6 = time.perf_counter()
 
-    # ── Step 5: Summary ────────────────────────────────────────────────────────
+    # ── Step 6: Summary ────────────────────────────────────────────────────────
     _banner("SYNTHESIS COMPLETE")
 
     account   = next(a for a in artifacts if a["source"] == "Account Summary")
@@ -186,11 +244,13 @@ def run() -> None:
         med  = sum(1 for c in conflicts if c.severity == "MEDIUM")
         mode_label = f"{YELLOW}Rule-based (no API key){RESET}"
 
-    load_e     = t1 - t0
-    analysis_e = t2 - t1
-    hitl_e     = t3 - t2
-    gen_e      = t4 - t3
-    total_e    = t4 - t0
+    load_e        = t1 - t0
+    consolidate_e = t2 - t1
+    guardrail_e   = t3 - t2
+    analysis_e    = t4 - t3
+    hitl_e        = t5 - t4
+    gen_e         = t6 - t5
+    total_e       = t6 - t0
 
     print(f"  Mode      :  {mode_label}")
     print(f"  Customer  :  {account['customer']} ({account['tier']}) -- renewal risk: {account['renewal_risk']}")
@@ -228,10 +288,14 @@ def run() -> None:
 
     print(f"  {BOLD}{CYAN}-- Timing {'─' * (W - 9)}{RESET}")
     print(f"  {'Artifact load':<22}: {GREEN}{_fmt_time(load_e)}{RESET}")
+    print(f"  {'Consolidation':<22}: {GREEN}{_fmt_time(consolidate_e)}{RESET}  → outputs/consolidated_state.json")
+    print(f"  {'Guardrails':<22}: {GREEN}{_fmt_time(guardrail_e)}{RESET}"
+          f"  {GREEN}{gr_passed}✓{RESET} {YELLOW}{gr_fixed}⚠{RESET} {RED}{gr_flagged}✗{RESET}"
+          f"  → outputs/guardrail_report.json")
     if use_ai:
-        print(f"  {'AI analysis':<22}: {GREEN}{_fmt_time(analysis_e)}{RESET}  (agentic tool calls)")
+        print(f"  {'AI analysis':<22}: {GREEN}{_fmt_time(analysis_e)}{RESET}  (agentic, on guardrailed data)")
     else:
-        print(f"  {'Rule analysis':<22}: {GREEN}{_fmt_time(analysis_e)}{RESET}")
+        print(f"  {'Rule analysis':<22}: {GREEN}{_fmt_time(analysis_e)}{RESET}  (on guardrailed data)")
     print(f"  {'HITL review':<22}: {GREEN}{_fmt_time(hitl_e)}{RESET}")
     if use_ai:
         print(f"  {'Report generation':<22}: {GREEN}{_fmt_time(gen_e)}{RESET}  (3x streaming)")

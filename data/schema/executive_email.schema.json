@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "executive_email.schema.json",
+  "title": "Executive Escalation Email",
+  "description": "Structured fields extracted from an executive escalation email markdown document. The source file is executive_email.md; this schema describes the parsed/extracted data structure that loaders produce.",
+  "type": "object",
+  "required": [
+    "from", "to", "date", "subject", "priority",
+    "sender_name", "sender_title", "sender_company",
+    "renewal_threat", "executive_requests"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "from":                        { "type": "string", "format": "email" },
+    "to":                          { "type": "string" },
+    "cc": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "date":                        { "type": "string", "format": "date-time" },
+    "subject":                     { "type": "string" },
+    "priority":                    { "type": "string", "enum": ["Highest", "High", "Normal", "Low"] },
+    "sender_name":                 { "type": "string" },
+    "sender_title":                { "type": "string" },
+    "sender_company":              { "type": "string" },
+    "orders_claimed_stuck":        { "type": "integer", "minimum": 0 },
+    "revenue_at_risk_usd":         { "type": "number", "minimum": 0 },
+    "contract_value_annual_usd":   { "type": "number", "minimum": 0 },
+    "renewal_month":               { "type": "string" },
+    "renewal_threat":              { "type": "boolean" },
+    "competitor_evaluation_mentioned": { "type": "boolean" },
+    "ceo_copied":                  { "type": "boolean" },
+    "incident_start_claim":        { "type": "string", "format": "date-time" },
+    "response_deadline":           { "type": "string", "format": "date-time" },
+    "tone": {
+      "type": "string",
+      "enum": ["urgent", "hostile", "concerned", "neutral", "satisfied"]
+    },
+    "executive_requests": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    }
+  }
+}

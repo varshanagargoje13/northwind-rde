@@ -49,6 +49,13 @@ def load_override_log():
     return [json.loads(l) for l in lines if l.strip()]
 
 
+def load_consolidated_state() -> dict | None:
+    path = OUT_DIR / "consolidated_state.json"
+    if not path.exists():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @st.cache_data
 def load_conflicts_and_actions():
     """Run rule-based conflict detection and return conflicts + default actions."""
@@ -81,7 +88,8 @@ def load_conflicts_and_actions():
     return conflict_dicts, actions
 
 
-override_log = load_override_log()
+override_log        = load_override_log()
+consolidated_state  = load_consolidated_state()
 live_conflicts, live_actions = load_conflicts_and_actions()
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
@@ -216,100 +224,178 @@ _STATUS_CSS = {
     "Backlog":   "background:#7c3aed;color:#fff;",
 }
 
-# CSS tweaks: make Streamlit buttons smaller and coloured per variant
+# Inject CSS: style Approve=green, Edit=blue-gray, Reject=red via data-key attribute
 st.markdown("""
 <style>
-div[data-testid="column"] button[kind="secondary"] {
-    font-size: 11px !important; padding: 3px 8px !important;
-    border-radius: 6px !important; width: 100%;
+/* Approve button — green */
+button[data-testid="baseButton-secondary"][kind="secondary"]:has(p:-webkit-any(:-webkit-matches-selector("*"))) { }
+[data-testid^="approve_"] > button { background:#16a34a !important; color:#fff !important; border-color:#16a34a !important; }
+[data-testid^="reject_"]  > button { background:#dc2626 !important; color:#fff !important; border-color:#dc2626 !important; }
+[data-testid^="edit_"]    > button { background:#334155 !important; color:#e2e8f0 !important; border-color:#475569 !important; }
+div[data-testid="column"] button {
+    font-size: 12px !important; padding: 4px 6px !important;
+    border-radius: 6px !important; width: 100% !important;
+    white-space: nowrap !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# Header row
-_H = "style='padding:8px 6px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#c7d2fe;'"
-st.markdown(
-    "<div style='background:#12152a;border:1px solid #2d3150;border-radius:10px 10px 0 0;"
-    "display:grid;grid-template-columns:110px 1fr 100px 110px 260px;"
-    "padding:0 4px;'>"
-    + "<div " + _H + ">INCIDENT_ID</div>"
-    + "<div " + _H + ">DESCRIPTION</div>"
-    + "<div " + _H + ">PRIORITY</div>"
-    + "<div " + _H + ">STATUS</div>"
-    + "<div " + _H + ">ACTION</div>"
-    + "</div>",
-    unsafe_allow_html=True,
+# Use identical column ratios for header and every data row so they align perfectly
+_COL_RATIOS = [1.2, 3.2, 1.0, 1.1, 2.4]
+_HS = ("font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;"
+       "color:#c7d2fe;padding:8px 4px 8px 0;border-bottom:2px solid #2d3150;"
+       "display:block;")
+
+# Header — same st.columns call, plain markdown
+st.markdown("<div style='background:#12152a;border:1px solid #2d3150;"
+            "border-radius:10px 10px 0 0;padding:0 8px;'>",
+            unsafe_allow_html=True)
+hc = st.columns(_COL_RATIOS)
+for col, label in zip(hc, ["INCIDENT_ID", "DESCRIPTION", "PRIORITY", "STATUS", "ACTION"]):
+    col.markdown(f"<span style='{_HS}'>{label}</span>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Data rows
+_pill = lambda css, label: (
+    "<span style='display:inline-block;padding:3px 10px;border-radius:10px;"
+    "font-size:12px;font-weight:700;" + css + "'>" + label + "</span>"
 )
-
-# Data rows — columns for layout, real st.button() for actions
+n = len(jira["tickets"])
 for i, t in enumerate(jira["tickets"]):
-    row_bg = "#1a1d2e" if i % 2 == 0 else "#161929"
-    border_r = "border-radius:0 0 10px 10px;" if i == len(jira["tickets"]) - 1 else ""
-    prio_css   = _PRIO_CSS.get(t["priority"], "background:#334155;color:#fff;")
-    status_css = _STATUS_CSS.get(t["status"],  "background:#334155;color:#fff;")
+    row_bg   = "#1a1d2e" if i % 2 == 0 else "#161929"
+    last_r   = "border-radius:0 0 10px 10px;" if i == n - 1 else ""
+    prio_css = _PRIO_CSS.get(t["priority"], "background:#334155;color:#fff;")
+    stat_css = _STATUS_CSS.get(t["status"],  "background:#334155;color:#fff;")
+    cell_s   = ("font-size:13px;padding:10px 4px 10px 0;"
+                "border-bottom:1px solid #2d3150;display:block;")
 
-    pill = (
-        "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
-        "font-size:12px;font-weight:700;{css}'>{label}</span>"
+    st.markdown(
+        "<div style='background:" + row_bg + ";border-left:1px solid #2d3150;"
+        "border-right:1px solid #2d3150;" + last_r + "padding:0 8px;'>",
+        unsafe_allow_html=True,
+    )
+    dc = st.columns(_COL_RATIOS)
+
+    dc[0].markdown(
+        "<span style='" + cell_s + "font-weight:700;color:#c7d2fe;'>" + t["id"] + "</span>",
+        unsafe_allow_html=True,
+    )
+    dc[1].markdown(
+        "<span style='" + cell_s + "color:#94a3b8;'>" + t["title"] + "</span>",
+        unsafe_allow_html=True,
+    )
+    dc[2].markdown(
+        "<span style='" + cell_s + "text-align:center;'>" + _pill(prio_css, t["priority"]) + "</span>",
+        unsafe_allow_html=True,
+    )
+    dc[3].markdown(
+        "<span style='" + cell_s + "text-align:center;'>" + _pill(stat_css, t["status"]) + "</span>",
+        unsafe_allow_html=True,
+    )
+    with dc[4]:
+        ba, be, br = st.columns(3)
+        if ba.button("✓ Approve", key=f"approve_{t['id']}", use_container_width=True):
+            _e = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                  "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
+                  "original": t["status"], "override": "approved", "comment": ""}
+            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_e) + "\n")
+            st.toast(f"{t['id']} approved", icon="✅")
+        if be.button("✎ Edit",   key=f"edit_{t['id']}",    use_container_width=True):
+            st.toast(f"Open Jira to edit {t['id']}", icon="✏️")
+        if br.button("✗ Reject", key=f"reject_{t['id']}",  use_container_width=True):
+            _e = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                  "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
+                  "original": t["status"], "override": "rejected", "comment": ""}
+            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_e) + "\n")
+            st.toast(f"{t['id']} rejected", icon="❌")
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("<div style='border:1px solid #2d3150;border-top:none;border-radius:0 0 10px 10px;"
+            "height:4px;background:#12152a;'></div>", unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONSOLIDATED STATE PANEL
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### Consolidated Interim State")
+if consolidated_state:
+    cs = consolidated_state
+    sigs = cs.get("conflict_signals", {})
+    oi   = cs.get("orders_impact", {})
+    inc  = cs.get("incident", {})
+
+    _ts = cs.get("consolidated_at", "")[:19].replace("T", " ") + " UTC"
+
+    st.markdown(
+        "<div style='background:#12152a;border:1px solid #2d3150;border-radius:12px;"
+        "padding:14px 18px 10px;margin-bottom:4px;'>"
+        "<div style='font-size:11px;color:#64748b;margin-bottom:10px;'>"
+        "Merged from <b style='color:#c7d2fe'>" + str(cs.get("source_count", 7)) + " sources</b>"
+        " &nbsp;·&nbsp; Persisted to <code style='color:#818cf8'>outputs/consolidated_state.json</code>"
+        " &nbsp;·&nbsp; Generated: <span style='color:#94a3b8'>" + _ts + "</span>"
+        "</div>",
+        unsafe_allow_html=True,
     )
 
-    c_id, c_desc, c_prio, c_stat, c_act = st.columns([1.1, 3, 1, 1.1, 2.6])
+    _cs1, _cs2, _cs3, _cs4 = st.columns(4)
 
-    with c_id:
-        st.markdown(
-            "<div style='background:" + row_bg + ";border-left:1px solid #2d3150;"
-            "border-bottom:1px solid #2d3150;" + border_r + "padding:10px 8px;"
-            "font-size:13px;font-weight:700;color:#c7d2fe;'>" + t["id"] + "</div>",
-            unsafe_allow_html=True,
-        )
-    with c_desc:
-        st.markdown(
-            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
-            "padding:10px 8px;font-size:13px;color:#94a3b8;'>" + t["title"] + "</div>",
-            unsafe_allow_html=True,
-        )
-    with c_prio:
-        st.markdown(
-            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
-            "padding:10px 6px;text-align:center;'>"
-            "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
-            "font-size:12px;font-weight:700;" + prio_css + "'>" + t["priority"] + "</span>"
+    def _sig_chip(label: str, active: bool, col) -> None:
+        bg  = "#7f1d1d" if active else "#0a2a0a"
+        fg  = "#fca5a5" if active else "#86efac"
+        bdr = "#be123c" if active else "#16a34a"
+        icon= "✗" if active else "✓"
+        col.markdown(
+            f"<div style='background:{bg};border:1px solid {bdr};border-radius:8px;"
+            f"padding:8px 10px;margin-bottom:6px;'>"
+            f"<div style='font-size:11px;font-weight:700;color:{fg};'>{icon} {label}</div>"
             "</div>",
             unsafe_allow_html=True,
         )
-    with c_stat:
-        st.markdown(
-            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
-            "padding:10px 6px;text-align:center;'>"
-            "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
-            "font-size:12px;font-weight:700;" + status_css + "'>" + t["status"] + "</span>"
-            "</div>",
+
+    _sig_chip("Status Mismatch",      sigs.get("status_mismatch", False),      _cs1)
+    _sig_chip("Order Count Mismatch", sigs.get("order_count_mismatch", False),  _cs2)
+    _sig_chip("Root Cause Mismatch",  sigs.get("root_cause_mismatch", False),   _cs3)
+    _sig_chip("Unassigned Critical",  sigs.get("unassigned_critical_ticket", False), _cs4)
+
+    _d1, _d2, _d3, _d4 = st.columns(4)
+    def _detail(label, val, col):
+        col.markdown(
+            f"<div style='background:#1a1d2e;border:1px solid #2d3150;border-radius:8px;"
+            f"padding:8px 10px;margin-bottom:6px;'>"
+            f"<div style='font-size:10px;color:#64748b;text-transform:uppercase;"
+            f"letter-spacing:.06em;'>{label}</div>"
+            f"<div style='font-size:14px;font-weight:700;color:#c7d2fe;margin-top:3px;'>{val}</div>"
+            f"</div>",
             unsafe_allow_html=True,
         )
-    with c_act:
-        st.markdown(
-            "<div style='background:" + row_bg + ";border-right:1px solid #2d3150;"
-            "border-bottom:1px solid #2d3150;" + border_r + "padding:6px 8px;'>",
-            unsafe_allow_html=True,
-        )
-        ba, be, br = st.columns(3)
-        if ba.button("✓ Approve", key=f"approve_{t['id']}",  use_container_width=True):
-            _entry = {"timestamp": datetime.now(timezone.utc).isoformat(),
-                      "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
-                      "original": t["status"], "override": "approved", "comment": ""}
-            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
-                _f.write(json.dumps(_entry) + "\n")
-            st.toast(f"{t['id']} approved", icon="✅")
-        if be.button("✎ Edit",    key=f"edit_{t['id']}",    use_container_width=True):
-            st.toast(f"Edit {t['id']} — open Jira ticket to update", icon="✎")
-        if br.button("✗ Reject",  key=f"reject_{t['id']}",  use_container_width=True):
-            _entry = {"timestamp": datetime.now(timezone.utc).isoformat(),
-                      "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
-                      "original": t["status"], "override": "rejected", "comment": ""}
-            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
-                _f.write(json.dumps(_entry) + "\n")
-            st.toast(f"{t['id']} rejected", icon="❌")
-        st.markdown("</div>", unsafe_allow_html=True)
+
+    _detail("Order claims range",
+            f"{oi.get('min_claim','?')} – {oi.get('max_claim','?')}  (gap: {oi.get('gap','?')})",
+            _d1)
+    _detail("Start-time span",
+            f"{sigs.get('start_time_span_hours','?')} h across sources",
+            _d2)
+    _detail("Distinct root causes",
+            str(cs.get("root_cause", {}).get("distinct_claim_count", "?")),
+            _d3)
+    _detail("Current error rate",
+            f"{inc.get('current_error_rate_pct','?')}%  ({inc.get('current_status','')})",
+            _d4)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    with st.expander("View full consolidated_state.json"):
+        st.json(cs)
+else:
+    st.info(
+        "Consolidated state not found. Run `python pipeline.py` to generate "
+        "`outputs/consolidated_state.json`.",
+        icon="ℹ️",
+    )
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -400,7 +486,102 @@ col_tl3.metric("Stuck Orders", str(telemetry["metrics"]["stuck_orders_count"]), 
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CONFLICTS + RECOMMENDATIONS
+# GUARDRAILS PANEL  (step 3 — runs before analysis so analysis uses clean data)
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### Guardrails — Per-Artifact Fix Templates")
+st.caption("Step 3 in the pipeline: each artifact is validated against its fix template **before** conflict analysis runs. Auto-fixable issues are corrected; unfixable fields are flagged.")
+
+_gr_path = OUT_DIR / "guardrail_report.json"
+
+if _gr_path.exists():
+    _gr = json.loads(_gr_path.read_text(encoding="utf-8"))
+    _grs = _gr.get("summary", {})
+    _gr_ts = _gr.get("generated_at", "")[:19].replace("T", " ") + " UTC"
+
+    _STATUS_COLORS = {
+        "PASSED":  ("#16a34a", "#0a2a0a", "✓"),
+        "FIXED":   ("#d97706", "#2a1800", "⚠"),
+        "FLAGGED": ("#dc2626", "#2a0808", "✗"),
+    }
+
+    # Summary strip
+    _gr_all_pass = _grs.get("flagged", 1) == 0 and _grs.get("fixed", 0) == 0
+    _gr_banner_bg = "#0a2a0a" if _gr_all_pass else "#2a0808" if _grs.get("flagged", 0) else "#2a1800"
+    _gr_banner_bdr = "#16a34a" if _gr_all_pass else "#dc2626" if _grs.get("flagged", 0) else "#d97706"
+    _gr_banner_msg = "All artifacts passed — analysis running on fully validated data." if _gr_all_pass \
+        else f"{_grs.get('flagged',0)} artifact(s) flagged — analysis ran on guardrailed data; flagged fields noted below." \
+        if _grs.get("flagged", 0) else \
+        f"{_grs.get('fixed',0)} field(s) auto-fixed — analysis ran on corrected data."
+
+    st.markdown(
+        "<div style='background:" + _gr_banner_bg + ";border:1px solid " + _gr_banner_bdr + ";"
+        "border-radius:10px;padding:10px 16px;margin-bottom:12px;"
+        "display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
+        "<div style='display:flex;gap:20px;align-items:center;'>"
+        "<span style='font-size:11px;color:#64748b;'>Generated: " + _gr_ts + "</span>"
+        "<span style='font-size:13px;font-weight:700;color:#16a34a;'>✓ " + str(_grs.get("passed",0)) + " PASSED</span>"
+        "<span style='font-size:13px;font-weight:700;color:#d97706;'>⚠ " + str(_grs.get("fixed",0)) + " FIXED</span>"
+        "<span style='font-size:13px;font-weight:700;color:#dc2626;'>✗ " + str(_grs.get("flagged",0)) + " FLAGGED</span>"
+        "</div>"
+        "<span style='font-size:11px;color:#94a3b8;font-style:italic;'>" + _gr_banner_msg + "</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # One card per artifact — 4 columns, wrap to second row if needed
+    _gr_arts = _gr.get("artifacts", [])
+    _gr_row1 = _gr_arts[:4]
+    _gr_row2 = _gr_arts[4:]
+
+    def _render_gr_row(arts):
+        cols = st.columns(len(arts)) if arts else []
+        for _col, _art in zip(cols, arts):
+            _fc, _bg, _icon = _STATUS_COLORS.get(_art["status"], ("#64748b", "#1a1d2e", "?"))
+            _check_html = ""
+            for _c in _art.get("checks", []):
+                _cc, _, _ci = _STATUS_COLORS.get(_c["status"], ("#64748b", "", "?"))
+                _check_html += (
+                    f"<div style='display:flex;gap:6px;align-items:flex-start;padding:3px 0;"
+                    f"border-bottom:1px solid #1e293b;'>"
+                    f"<span style='color:{_cc};font-size:10px;flex-shrink:0;margin-top:1px;'>{_ci}</span>"
+                    f"<div><div style='font-size:10px;font-weight:600;color:#c7d2fe;'>{_c['field']}</div>"
+                    f"<div style='font-size:9px;color:#64748b;'>{_c['note']}</div></div></div>"
+                )
+            with _col:
+                st.markdown(
+                    f"<div style='background:{_bg};border:1.5px solid {_fc};"
+                    f"border-radius:10px;padding:10px 12px;margin-bottom:8px;'>"
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;"
+                    f"margin-bottom:6px;'>"
+                    f"<span style='font-size:12px;font-weight:700;color:{_fc};'>{_icon} {_art['source']}</span>"
+                    f"<span style='font-size:10px;background:#12152a;border:1px solid {_fc};"
+                    f"color:{_fc};border-radius:20px;padding:1px 8px;font-weight:700;'>{_art['status']}</span>"
+                    f"</div>"
+                    f"<div style='font-size:10px;color:#94a3b8;margin-bottom:6px;'>"
+                    f"✓ {_art['passed']} &nbsp;⚠ {_art['fixed']} &nbsp;✗ {_art['flagged']}</div>"
+                    f"<div style='max-height:130px;overflow-y:auto;'>{_check_html}</div>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+    _render_gr_row(_gr_row1)
+    if _gr_row2:
+        _render_gr_row(_gr_row2)
+
+    with st.expander("View full guardrail_report.json"):
+        st.json(_gr)
+
+else:
+    st.info(
+        "Guardrail report not found. Run `python pipeline.py` to generate "
+        "`outputs/guardrail_report.json`.",
+        icon="ℹ️",
+    )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONFLICTS + RECOMMENDATIONS  (step 4 — runs on guardrailed artifacts)
 # ─────────────────────────────────────────────────────────────────────────────
 col_cf, col_rec = st.columns(2)
 
@@ -478,7 +659,7 @@ with col_rec:
 # ─────────────────────────────────────────────────────────────────────────────
 # DRI REVIEW PANEL
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### DRI Reviewp")
+st.markdown("### DRI Review")
 st.caption("Review synthesized conflicts and action items, then submit your decisions to the audit trail.")
 
 # initialise session state buckets

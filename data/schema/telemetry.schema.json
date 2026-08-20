@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "telemetry.schema.json",
+  "title": "Northwind Service Telemetry",
+  "description": "Production telemetry snapshot for northwind-order-service during and after an incident",
+  "type": "object",
+  "required": ["service", "environment", "report_generated", "metrics"],
+  "additionalProperties": false,
+  "properties": {
+    "service":          { "type": "string" },
+    "environment":      { "type": "string", "enum": ["production", "staging", "development"] },
+    "report_generated": { "type": "string", "format": "date-time" },
+    "metrics":          { "$ref": "#/definitions/Metrics" },
+    "alerts_fired": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Alert" }
+    }
+  },
+  "definitions": {
+    "Metrics": {
+      "type": "object",
+      "required": [
+        "error_rate_timeline", "db_connection_pool",
+        "first_anomaly_detected", "current_status", "stuck_orders_count"
+      ],
+      "properties": {
+        "error_rate_timeline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["timestamp", "error_rate_pct", "p99_latency_ms"],
+            "additionalProperties": false,
+            "properties": {
+              "timestamp":      { "type": "string", "format": "date-time" },
+              "error_rate_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+              "p99_latency_ms": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "db_connection_pool": {
+          "type": "object",
+          "required": ["max_connections", "peak_active_connections", "peak_time", "connection_wait_timeouts"],
+          "additionalProperties": false,
+          "properties": {
+            "max_connections":         { "type": "integer", "minimum": 1 },
+            "peak_active_connections": { "type": "integer", "minimum": 0 },
+            "peak_time":               { "type": "string", "format": "date-time" },
+            "connection_wait_timeouts":{ "type": "integer", "minimum": 0 }
+          }
+        },
+        "affected_endpoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["endpoint", "error_count", "error_type"],
+            "additionalProperties": false,
+            "properties": {
+              "endpoint":    { "type": "string" },
+              "error_count": { "type": "integer", "minimum": 0 },
+              "error_type":  { "type": "string" }
+            }
+          }
+        },
+        "error_rate_by_segment": {
+          "type": "object",
+          "properties": {
+            "note":          { "type": "string" },
+            "international": { "$ref": "#/definitions/SegmentMetrics" },
+            "domestic":      { "$ref": "#/definitions/SegmentMetrics" }
+          }
+        },
+        "cache_hit_rates": {
+          "type": "object",
+          "properties": {
+            "note":                  { "type": "string" },
+            "pre_incident_baseline": { "$ref": "#/definitions/CachePeriod" },
+            "during_incident":       { "$ref": "#/definitions/CachePeriod" },
+            "post_mitigation":       { "$ref": "#/definitions/CachePeriod" }
+          }
+        },
+        "first_anomaly_detected": { "type": "string", "format": "date-time" },
+        "peak_impact_time":       { "type": "string", "format": "date-time" },
+        "mitigation_time":        { "type": "string", "format": "date-time" },
+        "current_status":         {
+          "type": "string",
+          "enum": ["healthy", "degraded", "down", "recovering"]
+        },
+        "stuck_orders_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "SegmentMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "current_error_rate_pct":  { "type": "number", "minimum": 0, "maximum": 100 },
+        "peak_error_rate_pct":     { "type": "number", "minimum": 0, "maximum": 100 },
+        "peak_time":               { "type": "string", "format": "date-time" },
+        "connection_pool_size":    { "type": "integer", "minimum": 1 },
+        "connection_pool_max_hit": { "type": "boolean" },
+        "note":                    { "type": "string" }
+      }
+    },
+    "CachePeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "period":       { "type": "string" },
+        "hit_rate_pct": { "type": "number", "minimum": 0, "maximum": 100 },
+        "note":         { "type": "string" }
+      }
+    },
+    "Alert": {
+      "type": "object",
+      "required": ["alert", "fired_at", "threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "alert":     { "type": "string" },
+        "fired_at":  { "type": "string", "format": "date-time" },
+        "threshold": { "type": "string" }
+      }
+    }
+  }
+}

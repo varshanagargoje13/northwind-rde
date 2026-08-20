@@ -2,13 +2,15 @@
 AI-powered escalation synthesis using Claude claude-opus-5.
 
 Two-phase agentic architecture:
-  Phase 1 — Conflict analysis: Claude autonomously reads all 7 artifacts and
-             uses structured tools to flag conflicts and surface action items.
+  Phase 1 — Conflict analysis: Claude reads all 7 artifacts and their JSON schemas
+             from data/schema/, checks each artifact against its schema constraints,
+             flags cross-source conflicts, and surfaces action items via structured tools.
              The Tool Runner drives the agentic loop.
   Phase 2 — Report generation: Three streaming calls produce the output reports
              from the structured analysis produced in Phase 1.
 """
 
+import json
 import os
 import sys
 from datetime import datetime
@@ -23,9 +25,102 @@ MODEL = "claude-opus-5"
 # Reset at the top of run_agentic_analysis() before each pipeline execution.
 _current_conflicts: list[dict] = []
 _current_actions: list[dict] = []
+_current_schema_violations: list[dict] = []
+
+
+# ── Schema loader ─────────────────────────────────────────────────────────────
+
+_SCHEMA_FILE_TO_SOURCE: dict[str, str] = {
+    "zendesk_ticket":  "Zendesk",
+    "slack_thread":    "Slack",
+    "postmortem":      "Postmortem",
+    "telemetry":       "Telemetry",
+    "account_summary": "Account Summary",
+    "jira_tickets":    "Jira",
+    "executive_email": "Executive Email",
+}
+
+
+def load_schemas(schema_dir: Path) -> dict[str, dict]:
+    """Load all *.schema.json files from data/schema/ → {source_name: schema_dict}."""
+    schemas: dict[str, dict] = {}
+    if not schema_dir or not schema_dir.exists():
+        return schemas
+    for f in sorted(schema_dir.glob("*.schema.json")):
+        stem = f.name[: f.name.index(".")]          # "zendesk_ticket.schema.json" → "zendesk_ticket"
+        source = _SCHEMA_FILE_TO_SOURCE.get(stem)
+        if source:
+            try:
+                schemas[source] = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    return schemas
+
+
+def _summarize_schema(schema: dict) -> str:
+    """Build a compact schema summary for inclusion in the LLM prompt."""
+    lines: list[str] = []
+    props    = schema.get("properties", {})
+    defs     = schema.get("definitions", {})
+    required = set(schema.get("required", []))
+
+    for field, spec in props.items():
+        req_mark = "*" if field in required else " "
+        ftype    = spec.get("type", "object" if "$ref" in spec else "?")
+        parts: list[str] = []
+        if "enum"    in spec: parts.append("enum: " + " | ".join(str(v) for v in spec["enum"]))
+        if "minimum" in spec: parts.append(f"min={spec['minimum']}")
+        if "maximum" in spec: parts.append(f"max={spec['maximum']}")
+        if "pattern" in spec: parts.append(f"pattern={spec['pattern']}")
+        if "$ref"    in spec:
+            ref_name  = spec["$ref"].split("/")[-1]
+            ref_props = list(defs.get(ref_name, {}).get("properties", {}).keys())
+            preview   = ", ".join(ref_props[:5]) + ("…" if len(ref_props) > 5 else "")
+            parts.append(f"→ {ref_name}({preview})")
+        suffix = f"  [{', '.join(parts)}]" if parts else ""
+        lines.append(f"    [{req_mark}] {field}: {ftype}{suffix}")
+
+    return "\n".join(lines) if lines else "    (no top-level properties)"
 
 
 # ── Agentic tools ─────────────────────────────────────────────────────────────
+
+@beta_tool
+def flag_schema_violation(
+    source: str,
+    field: str,
+    expected: str,
+    actual: str,
+    severity: str,
+) -> str:
+    """Flag a field that violates its JSON schema definition.
+
+    Call this whenever an artifact's data does not conform to its schema:
+    missing required fields, values outside an allowed enum, numbers outside
+    min/max bounds, wrong type, or unexpected additional properties.
+
+    Args:
+        source: Artifact source name (e.g., 'Zendesk', 'Jira', 'Account Summary').
+        field: Field name or JSON path (e.g., 'renewal_risk', 'tickets[2].status').
+        expected: Schema constraint (e.g., 'enum: LOW|MEDIUM|HIGH|CRITICAL', 'integer ≥ 0').
+        actual: The actual value found in the artifact.
+        severity: 'HIGH' (blocks analysis), 'MEDIUM' (suspicious), or 'LOW' (advisory).
+    """
+    _current_schema_violations.append({
+        "source": source,
+        "field": field,
+        "expected": expected,
+        "actual": actual,
+        "severity": severity,
+    })
+    col = "\033[91m" if severity == "HIGH" else "\033[93m" if severity == "MEDIUM" else "\033[92m"
+    print(
+        f"    {col}[SCHEMA {severity}]\033[0m [{source}] {field}: "
+        f"expected {expected!r}, got {actual!r}",
+        flush=True,
+    )
+    return f"Schema violation registered: [{source}] {field}"
+
 
 @beta_tool
 def flag_conflict(
@@ -98,15 +193,43 @@ def add_action_item(
 
 # ── Artifact context builder ───────────────────────────────────────────────────
 
-def _build_artifact_context(artifacts: list[dict]) -> str:
-    """Flatten all 7 artifacts into a single structured prompt block."""
+def _build_artifact_context(artifacts: list[dict], schemas: dict[str, dict]) -> str:
+    """Flatten all 7 artifacts — with their JSON schemas — into a single prompt block."""
     lines = [
-        "# 7 Escalation Artifacts\n",
-        "Analyze every artifact carefully. Flag ALL conflicts between sources.",
-        "Add an action item for every concrete step that needs to happen.\n",
+        "# 7 Escalation Artifacts + JSON Schemas\n",
+        "For EACH artifact below you have both its SCHEMA and its DATA.",
+        "Steps:",
+        "  1. Read the schema — note required(*) fields, enum values, and numeric bounds.",
+        "  2. Check each data field against its schema — call flag_schema_violation for",
+        "     any missing required field, invalid enum value, out-of-range number, or wrong type.",
+        "  3. Call flag_conflict for every contradiction between two or more sources.",
+        "  4. Call add_action_item for every concrete action needed.\n",
     ]
+
+    schemas_loaded = sorted(schemas.keys())
+    if schemas_loaded:
+        lines.append(f"Schemas loaded from data/schema/: {', '.join(schemas_loaded)}\n")
+    else:
+        lines.append("(No schemas found — skipping schema validation step)\n")
+
     for a in artifacts:
-        lines.append(f"## [{a['source']}]  (file: {a['file']})")
+        source = a["source"]
+        lines.append(f"{'─' * 60}")
+        lines.append(f"## [{source}]  (file: {a['file']})\n")
+
+        # ── Schema block ──────────────────────────────────────────────────────
+        if source in schemas:
+            schema = schemas[source]
+            lines.append(f"### Schema  ({schema.get('title', source)})")
+            lines.append(f"  Description: {schema.get('description', '')}")
+            lines.append(f"  Fields (* = required):")
+            lines.append(_summarize_schema(schema))
+        else:
+            lines.append("### Schema: (not available for this source)")
+        lines.append("")
+
+        # ── Data block ────────────────────────────────────────────────────────
+        lines.append("### Data")
         skip = {"source", "file", "raw", "raw_text"}
         for k, v in a.items():
             if k in skip or v is None:
@@ -114,12 +237,13 @@ def _build_artifact_context(artifacts: list[dict]) -> str:
             if isinstance(v, datetime):
                 v = v.strftime("%Y-%m-%d %H:%M UTC")
             lines.append(f"  {k}: {v}")
-        # Include raw text preview for markdown artifacts
+
+        # Raw text preview for markdown artifacts
         if "raw_text" in a:
             lines.append("  --- content ---")
             lines.append(a["raw_text"][:1200])
             lines.append("  --- end ---")
-        # Include comments / messages for structured artifacts
+        # Comments / messages for structured artifacts
         elif "raw" in a and isinstance(a.get("raw"), dict):
             raw = a["raw"]
             if "comments" in raw:
@@ -137,40 +261,64 @@ def _build_artifact_context(artifacts: list[dict]) -> str:
                         f"{m.get('text', '')[:200]}"
                     )
         lines.append("")
+
     return "\n".join(lines)
 
 
 # ── Phase 1: Agentic conflict + action analysis ────────────────────────────────
 
-ANALYSIS_SYSTEM = """You are an expert customer escalation analyst. You have 7 artifacts from
-a live software escalation incident involving a strategic customer at risk of churning.
+ANALYSIS_SYSTEM = """You are an expert customer escalation analyst. You have 7 escalation artifacts
+AND their JSON schemas from data/schema/. Your task is schema-aware conflict analysis.
 
-Your job:
-1. Read every artifact carefully and completely.
-2. Use flag_conflict for EVERY contradiction between sources — timeline disagreements,
-   status conflicts (one says resolved, another says open), impact-count differences,
-   root-cause disputes, revenue-estimate gaps, etc. Do not miss conflicts.
-3. Use add_action_item for EVERY concrete action needed — technical fixes, comms,
-   process improvements, account health steps. Prioritize P0/P1/P2/P3.
+STEP 1 — Schema validation (use flag_schema_violation):
+  For each artifact, check every data field against its schema:
+  • Missing required fields (marked * in the schema listing)
+  • Values outside allowed enums (e.g., renewal_risk must be LOW/MEDIUM/HIGH/CRITICAL)
+  • Numbers outside min/max bounds (e.g., error_rate_pct must be 0–100, health_score 0–100)
+  • Wrong types (e.g., sla_breach must be boolean, not string)
+  • Pattern mismatches (e.g., ticket_id must match ^ZD-\\d+$)
 
-Be exhaustive. Missing a conflict or action item in an escalation costs the customer relationship."""
+STEP 2 — Cross-source conflict detection (use flag_conflict):
+  For every contradiction between two or more artifacts:
+  • Timeline disagreements (incident start time differs between sources)
+  • Resolution status conflicts (one says RESOLVED, another says OPEN)
+  • Order count mismatches (47 vs 23 vs 60 affected orders)
+  • Root-cause disputes (DB migration vs gateway connection leak)
+  • Revenue / impact figure differences
+
+STEP 3 — Action items (use add_action_item):
+  For every concrete step needed — technical fixes, customer comms, process improvements,
+  account health actions. Prioritize P0 (today) / P1 (this week) / P2 (sprint) / P3 (account).
+
+Be exhaustive. Missing a schema violation, conflict, or action item in an escalation costs
+the customer relationship."""
 
 
-def run_agentic_analysis(artifacts: list[dict]) -> tuple[list[dict], list[dict]]:
+def run_agentic_analysis(
+    artifacts: list[dict],
+    schemas: dict[str, dict],
+) -> tuple[list[dict], list[dict], list[dict]]:
     """
-    Phase 1: Claude uses tool calls to flag conflicts and action items.
-    Returns (conflicts, action_items).
+    Phase 1: Claude reads artifact schemas then data, calls tools to register
+    schema violations, conflicts, and action items.
+    Returns (conflicts, action_items, schema_violations).
     """
-    global _current_conflicts, _current_actions
-    _current_conflicts = []
-    _current_actions = []
+    global _current_conflicts, _current_actions, _current_schema_violations
+    _current_conflicts        = []
+    _current_actions          = []
+    _current_schema_violations = []
 
-    client = anthropic.Anthropic()
-    context = _build_artifact_context(artifacts)
+    client  = anthropic.Anthropic()
+    context = _build_artifact_context(artifacts, schemas)
 
-    print("  Running agentic analysis (claude-opus-5 + Tool Runner)...\n", flush=True)
+    n_schemas = len(schemas)
+    print(
+        f"  Running schema-aware agentic analysis "
+        f"(claude-opus-5 + Tool Runner, {n_schemas} schemas loaded)...\n",
+        flush=True,
+    )
 
-    # cache_control on both the system prompt and the large artifact context block
+    # cache_control on both the system prompt and the large artifact+schema context
     # so repeated tool-loop turns reuse the cached prefix instead of re-tokenizing
     cached_system = [
         {"type": "text", "text": ANALYSIS_SYSTEM, "cache_control": {"type": "ephemeral"}}
@@ -188,17 +336,18 @@ def run_agentic_analysis(artifacts: list[dict]) -> tuple[list[dict], list[dict]]
         model=MODEL,
         max_tokens=16000,
         thinking={"type": "adaptive"},
-        tools=[flag_conflict, add_action_item],
+        tools=[flag_schema_violation, flag_conflict, add_action_item],
         system=cached_system,
         messages=cached_messages,
     )
 
     for _ in runner:
-        pass  # Tool Runner drives the loop; tools append to _current_conflicts / _current_actions
+        pass  # Tool Runner drives the loop
 
-    conflicts = list(_current_conflicts)
-    actions = list(_current_actions)
-    return conflicts, actions
+    conflicts  = list(_current_conflicts)
+    actions    = list(_current_actions)
+    violations = list(_current_schema_violations)
+    return conflicts, actions, violations
 
 
 # ── Phase 2: Streaming report generation ──────────────────────────────────────
@@ -253,6 +402,7 @@ def generate_reports(
     artifacts: list[dict],
     ai_conflicts: list[dict],
     ai_actions: list[dict],
+    ai_schema_violations: list[dict] | None = None,
 ) -> tuple[str, str, str]:
     """
     Phase 2: Three streaming calls — one per output report.
@@ -266,6 +416,8 @@ def generate_reports(
     jira      = next((a for a in artifacts if a["source"] == "Jira"), {})
     email     = next((a for a in artifacts if a["source"] == "Executive Email"), {})
 
+    violations = ai_schema_violations or []
+
     ctx = (
         f"CUSTOMER: {account.get('customer')} ({account.get('tier')})\n"
         f"CONTRACT: ${account.get('contract_value_usd', 0):,}/year | "
@@ -277,7 +429,17 @@ def generate_reports(
         f"STUCK ORDERS: {telemetry.get('stuck_orders_count')} (telemetry) | "
         f"Known: {', '.join(jira.get('known_affected_orders', []))}\n"
         f"OPEN JIRA: {', '.join(jira.get('critical_open_tickets', []))}\n\n"
-        f"AI-DETECTED CONFLICTS ({len(ai_conflicts)}):\n"
+        + (
+            f"SCHEMA VIOLATIONS DETECTED ({len(violations)}):\n"
+            + "\n".join(
+                f"  [{v['severity']}] [{v['source']}] {v['field']}: "
+                f"expected {v['expected']!r}, got {v['actual']!r}"
+                for v in violations
+            )
+            + "\n\n"
+            if violations else ""
+        )
+        + f"AI-DETECTED CONFLICTS ({len(ai_conflicts)}):\n"
         + "\n".join(
             f"  [{c['severity']}] {c['category']}: {c['description']}"
             for c in ai_conflicts
@@ -359,12 +521,41 @@ because of cross-source conflicts. Cite every source."""
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
-def synthesize(artifacts: list[dict]) -> tuple[list[dict], list[dict], str, str, str]:
+def synthesize(
+    artifacts: list[dict],
+    data_dir: Path | None = None,
+) -> tuple[list[dict], list[dict], str, str, str]:
     """
-    Full two-phase AI synthesis.
+    Full two-phase schema-aware AI synthesis.
+
+    Phase 1: Loads JSON schemas from data_dir/schema/, then runs the agentic loop —
+             Claude validates each artifact against its schema, flags cross-source
+             conflicts, and surfaces action items.
+    Phase 2: Three streaming report calls using cached context.
+
     Returns (conflicts, actions, executive_summary, conflict_report, action_items).
     Raises anthropic.AuthenticationError if ANTHROPIC_API_KEY is not set.
     """
-    conflicts, actions = run_agentic_analysis(artifacts)
-    exec_md, conflict_md, actions_md = generate_reports(artifacts, conflicts, actions)
+    schema_dir = (data_dir / "schema") if data_dir else None
+    schemas    = load_schemas(schema_dir) if schema_dir else {}
+
+    if schemas:
+        print(f"  Schemas loaded: {', '.join(sorted(schemas))}", flush=True)
+    else:
+        print("  [WARN] No schemas found — schema validation step will be skipped.", flush=True)
+
+    conflicts, actions, violations = run_agentic_analysis(artifacts, schemas)
+
+    if violations:
+        print(
+            f"\n  Schema violations: {len(violations)} "
+            f"({sum(1 for v in violations if v['severity'] == 'HIGH')} HIGH / "
+            f"{sum(1 for v in violations if v['severity'] == 'MEDIUM')} MEDIUM / "
+            f"{sum(1 for v in violations if v['severity'] == 'LOW')} LOW)",
+            flush=True,
+        )
+
+    exec_md, conflict_md, actions_md = generate_reports(
+        artifacts, conflicts, actions, violations
+    )
     return conflicts, actions, exec_md, conflict_md, actions_md

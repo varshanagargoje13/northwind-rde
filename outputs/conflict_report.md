@@ -38,7 +38,7 @@
 
 **Source breakdown:**
   - RESOLVED claim: Postmortem
-  - STILL OPEN / DEGRADED: Jira, Account Summary, Zendesk, Telemetry, Executive Email, Slack
+  - STILL OPEN / DEGRADED: Slack, Telemetry, Account Summary, Zendesk, Executive Email, Jira
   - Telemetry shows 1.1-1.4% error rate on 2026-08-19 (above 0.2% baseline)
   - Zendesk: customer reported new failures on 2026-08-19T09:22Z
   - Jira NWAPI-3362 (stuck orders) is Open and Unassigned
@@ -93,7 +93,7 @@
 | Postmortem | 2026-08-13 23:00 UTC | 23 | resolved — 2026-08-14T16:00:00Z |
 | Telemetry | 2026-08-11 18:00 UTC | — | degraded — telemetry shows 1.1-1.4% error rate as of 2026-08-19 |
 | Account Summary | — | 23 | open — executive escalation active |
-| Jira | — | — | 2 open tickets — NWAPI-3362 (stuck orders) unassigned |
+| Jira | — | — | 3 open tickets — NWAPI-3362 (stuck orders) unassigned |
 | Executive Email | 2026-08-12 13:00 UTC | 47 | open — VP + CEO escalated, renewal at risk, competitor evaluation |
 
 ---

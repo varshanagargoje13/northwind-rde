@@ -1,0 +1,180 @@
+{
+  "consolidated_at": "2026-08-20T12:25:38.986000+00:00",
+  "source_count": 7,
+  "sources_loaded": [
+    "Zendesk",
+    "Slack",
+    "Postmortem",
+    "Telemetry",
+    "Account Summary",
+    "Jira",
+    "Executive Email"
+  ],
+  "incident": {
+    "start_claims_by_source": {
+      "Zendesk": "2026-08-12T14:00:00+00:00",
+      "Slack": "2026-08-11T18:00:00+00:00",
+      "Postmortem": "2026-08-13T23:00:00+00:00",
+      "Telemetry": "2026-08-11T18:00:00+00:00",
+      "Executive Email": "2026-08-12T13:00:00+00:00"
+    },
+    "start_time_span_hours": 53.0,
+    "resolution_status_by_source": {
+      "Zendesk": "open \u2014 customer still reporting issues as of 2026-08-19",
+      "Slack": "mitigated \u2014 but Contoso still reporting issues 2026-08-19",
+      "Postmortem": "resolved \u2014 2026-08-14T16:00:00Z",
+      "Telemetry": "degraded \u2014 telemetry shows 1.1-1.4% error rate as of 2026-08-19",
+      "Account Summary": "open \u2014 executive escalation active",
+      "Jira": "3 open tickets \u2014 NWAPI-3362 (stuck orders) unassigned",
+      "Executive Email": "open \u2014 VP + CEO escalated, renewal at risk, competitor evaluation begun"
+    },
+    "current_status": "degraded",
+    "current_error_rate_pct": 1.4,
+    "peak_error_rate_pct": 52.3,
+    "duration_hours": 17,
+    "customers_affected_postmortem": 3,
+    "mitigation_time": "2026-08-14T16:00:00+00:00",
+    "resolution_time_postmortem": "2026-08-14T16:00:00+00:00"
+  },
+  "orders_impact": {
+    "claims_by_source": {
+      "Zendesk": 47,
+      "Slack": 60,
+      "Postmortem": 23,
+      "Account Summary": 23,
+      "Executive Email": 47
+    },
+    "min_claim": 23,
+    "max_claim": 60,
+    "stuck_orders_telemetry": 31,
+    "known_stuck_order_ids": [
+      "ORD-55892",
+      "ORD-55901"
+    ],
+    "postmortem_count": 23,
+    "customer_claimed_count": 47,
+    "gap": 24
+  },
+  "root_cause": {
+    "claims_by_source": {
+      "Zendesk": "recent infrastructure change (unspecified)",
+      "Slack": "API gateway v2.4.1 connection leak (per janet.leverling & steven.buchanan)",
+      "Postmortem": "DB migration script migrate_orders_v12.sql caused index corruption on orders.status_idx",
+      "Executive Email": "not provided \u2014 customer demands specifics"
+    },
+    "jira_hypotheses": [
+      "API gateway v2.4.1 connection leak",
+      "Stale cache entries not evicted under connection pool pressure",
+      "DB migration script with unvalidated REINDEX operation"
+    ],
+    "distinct_claim_count": 7
+  },
+  "revenue_at_risk": {
+    "claims_by_source": {
+      "Postmortem": 85000,
+      "Account Summary": 200000,
+      "Executive Email": 200000
+    },
+    "max_usd": 200000
+  },
+  "customer": {
+    "name": "Contoso Ltd",
+    "tier": "Enterprise",
+    "contract_value_usd": 480000,
+    "renewal_date": "2026-12-01",
+    "renewal_risk": "HIGH",
+    "health_score": 42,
+    "nps_score": 6,
+    "sla_breaches_90d": 2,
+    "revenue_at_risk_usd": 200000,
+    "executive_escalation": true,
+    "executive_contact": "Derek Hartley (VP Procurement)",
+    "renewal_threat_stated": true,
+    "executive_requests": [
+      "Bridge call today 2pm EST",
+      "Written RCA by EOD",
+      "Resolution timeline with named owners",
+      "Confirmation all 47 orders remediated",
+      "Explanation of 3 escalations in 2 weeks"
+    ],
+    "email_tone": "urgent / threatening"
+  },
+  "engineering": {
+    "open_jira_count": 3,
+    "critical_open_ticket_ids": [
+      "NWAPI-3341",
+      "NWAPI-3362"
+    ],
+    "known_affected_orders": [
+      "ORD-55892",
+      "ORD-55901"
+    ],
+    "total_api_errors": 12725,
+    "connection_pool_max": 200,
+    "connection_wait_timeouts": 1847,
+    "postmortem_action_items": [
+      "Add index validation step to migration checklist (Steven Buchanan, due Aug 23)",
+      "Implement connection pool circuit breaker (Nancy Davolio, due Aug 30)",
+      "Add pre-migration dry-run environment (Andrew Fuller, due Sep 6)"
+    ]
+  },
+  "communications": {
+    "executive_email_subject": "[URGENT ESCALATION] Complete order processing failure \u2014 Contoso Ltd \u2014 CEO CC'd",
+    "executive_email_sender": "Derek Hartley <d.hartley@contoso-ltd.com>",
+    "executive_email_cc": "Margaret Peacock <m.peacock@contoso-ltd.com>; Simon Holt <ceo@contoso-ltd.com>",
+    "slack_channel": "#incident-order-processing",
+    "slack_contributors": [
+      "robert.king",
+      "nancy.davolio",
+      "janet.leverling",
+      "steven.buchanan",
+      "andrew.fuller"
+    ],
+    "slack_message_count": 14,
+    "zendesk_primary_ticket": "ZD-98741",
+    "zendesk_sla_breach": true
+  },
+  "conflict_signals": {
+    "status_mismatch": true,
+    "order_count_mismatch": true,
+    "root_cause_mismatch": true,
+    "start_time_span_hours": 53.0,
+    "order_count_gap": 24,
+    "postmortem_vs_customer_gap": 24,
+    "unassigned_critical_ticket": true,
+    "renewal_threat_active": true,
+    "sla_breached": true
+  },
+  "timeline": [
+    {
+      "ts": "2026-08-11T18:00:00+00:00",
+      "source": "Telemetry",
+      "event": "First anomaly detected"
+    },
+    {
+      "ts": "2026-08-11T18:00:00+00:00",
+      "source": "Slack",
+      "event": "Connection pool exhaustion begins (gateway v2.4.1)"
+    },
+    {
+      "ts": "2026-08-13T23:00:00+00:00",
+      "source": "Postmortem",
+      "event": "DB migration index corruption window opens"
+    },
+    {
+      "ts": "2026-08-14T06:00:00+00:00",
+      "source": "Telemetry",
+      "event": "Peak error rate reached: 52.3%"
+    },
+    {
+      "ts": "2026-08-14T16:00:00+00:00",
+      "source": "Telemetry",
+      "event": "Initial mitigation applied (pool size bump)"
+    },
+    {
+      "ts": "2026-08-14T16:00:00+00:00",
+      "source": "Postmortem",
+      "event": "Postmortem declares incident RESOLVED"
+    }
+  ]
+}

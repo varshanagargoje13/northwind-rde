@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "zendesk_ticket.schema.json",
+  "title": "Zendesk Escalation Ticket Feed",
+  "description": "One or more Zendesk support tickets for a customer escalation incident",
+  "type": "object",
+  "required": ["tickets"],
+  "additionalProperties": false,
+  "properties": {
+    "tickets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/Ticket" }
+    }
+  },
+  "definitions": {
+    "Ticket": {
+      "type": "object",
+      "required": ["ticket_id", "created_at", "updated_at", "status", "priority", "requester", "assignee", "subject", "description", "sla_breach", "comments"],
+      "additionalProperties": false,
+      "properties": {
+        "ticket_id":               { "type": "string", "pattern": "^ZD-\\d+$" },
+        "created_at":              { "type": "string", "format": "date-time" },
+        "updated_at":              { "type": "string", "format": "date-time" },
+        "status":                  { "type": "string", "enum": ["open", "pending", "hold", "solved", "closed"] },
+        "priority":                { "type": "string", "enum": ["urgent", "high", "normal", "low"] },
+        "requester":               { "$ref": "#/definitions/Requester" },
+        "assignee":                { "type": "string" },
+        "subject":                 { "type": "string" },
+        "description":             { "type": "string" },
+        "tags":                    { "type": "array", "items": { "type": "string" } },
+        "sla_breach":              { "type": "boolean" },
+        "first_response_time_hours": { "type": ["number", "null"], "minimum": 0 },
+        "csat_score":              { "type": ["number", "null"], "minimum": 0, "maximum": 5 },
+        "linked_ticket":           { "type": "string", "pattern": "^ZD-\\d+$" },
+        "customer_disputes": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/CustomerDispute" }
+        },
+        "comments": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/Comment" }
+        }
+      }
+    },
+    "Requester": {
+      "type": "object",
+      "required": ["name", "email", "organization"],
+      "additionalProperties": false,
+      "properties": {
+        "name":         { "type": "string" },
+        "email":        { "type": "string", "format": "email" },
+        "organization": { "type": "string" }
+      }
+    },
+    "CustomerDispute": {
+      "type": "object",
+      "required": ["dispute", "customer_claim", "engineering_claim", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "dispute":           { "type": "string" },
+        "customer_claim":    { "type": "string" },
+        "engineering_claim": { "type": "string" },
+        "status":            { "type": "string", "enum": ["unresolved", "resolved", "disputed"] }
+      }
+    },
+    "Comment": {
+      "type": "object",
+      "required": ["author", "timestamp", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "author":    { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "body":      { "type": "string" }
+      }
+    }
+  }
+}

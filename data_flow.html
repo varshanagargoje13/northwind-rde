@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northwind Escalation Synthesizer — Data Flow</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0d1117;
+  color: #e2e8f0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  padding: 28px 24px 48px;
+}
+
+/* ── header ── */
+.page-title {
+  text-align: center;
+  margin-bottom: 36px;
+}
+.page-title h1 {
+  font-size: 21px;
+  font-weight: 700;
+  color: #c7d2fe;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.page-title p {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 6px;
+}
+
+/* ── outer wrapper ── */
+.outer {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* ── pipeline orchestrator border ── */
+.orch-banner {
+  position: relative;
+  border: 1.5px dashed #2d3748;
+  border-radius: 14px;
+  padding: 22px 18px 18px;
+  margin-bottom: 12px;
+}
+.orch-label {
+  position: absolute;
+  top: -12px; left: 20px;
+  background: #0d1117;
+  padding: 2px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #38bdf8;
+  border: 1px solid #38bdf8;
+  border-radius: 20px;
+}
+
+/* ── diagram ── */
+.diagram {
+  position: relative;
+}
+.arrow-svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+/* ── 5-column grid ── */
+.cols {
+  display: grid;
+  grid-template-columns: 172px 152px 178px 200px 186px;
+  gap: 0 28px;
+  position: relative;
+  z-index: 1;
+  align-items: start;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.col-header {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: #475569;
+  text-align: center;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid #1e293b;
+  margin-bottom: 4px;
+}
+
+/* ── nodes ── */
+.node {
+  border-radius: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid transparent;
+  cursor: default;
+  transition: box-shadow .15s;
+}
+.node:hover { box-shadow: 0 0 0 2.5px rgba(255,255,255,.18); }
+
+.n-title { font-size: 12px; font-weight: 700; line-height: 1.35; }
+.n-sub   { font-size: 10px; font-weight: 400; opacity: .72; margin-top: 4px; line-height: 1.5; }
+.n-badge {
+  display: inline-block;
+  margin-top: 7px;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  padding: 2px 9px; border-radius: 20px;
+}
+
+/* color themes */
+.t-src      { background: #0c1f45; border-color: #2563eb; color: #93c5fd; }
+.t-loader   { background: #180e40; border-color: #7c3aed; color: #c4b5fd; }
+.t-rule     { background: #241500; border-color: #b45309; color: #fcd34d; }
+.t-ai       { background: #1c0012; border-color: #be123c; color: #fda4af; }
+.t-hitl     { background: #001e1e; border-color: #0d9488; color: #5eead4; }
+.t-report   { background: #001809; border-color: #15803d; color: #86efac; }
+.t-out      { background: #001508; border-color: #22c55e; color: #86efac; }
+.t-log      { background: #1a0f00; border-color: #d97706; color: #fde68a; }
+
+/* badge variants */
+.b-rule  { background: #1b2800; color: #bef264; }
+.b-ai    { background: #7f1d1d; color: #fca5a5; }
+
+/* spacers */
+.gap-sm { height: 16px; }
+.gap-md { height: 30px; }
+
+/* ── dashboard bar ── */
+.dash-bar {
+  border: 1.5px solid #4f46e5;
+  border-radius: 12px;
+  background: #0c0c28;
+  padding: 14px 18px;
+  margin-top: 16px;
+}
+.dash-bar h3 {
+  font-size: 12px; font-weight: 700;
+  color: #a5b4fc;
+  letter-spacing: .07em; text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.dash-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+.dash-tag {
+  font-size: 10px; padding: 3px 10px;
+  border-radius: 20px;
+}
+.dt-r { background: #0c1f45; border: 1px solid #2563eb; color: #93c5fd; }
+.dt-c { background: #180e40; border: 1px solid #7c3aed; color: #c4b5fd; }
+.dt-s { background: #001e1e; border: 1px solid #0d9488; color: #5eead4; }
+
+/* ── legend ── */
+.legend {
+  display: flex; flex-wrap: wrap; gap: 10px 22px;
+  margin-top: 22px; padding-top: 14px;
+  border-top: 1px solid #1e293b;
+}
+.leg { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #94a3b8; }
+.leg-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── key note ── */
+.keynote {
+  text-align: center;
+  font-size: 10px; color: #475569;
+  margin-top: 14px;
+  display: flex; justify-content: center; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.kn-item { display: flex; align-items: center; gap: 6px; }
+.kn-line {
+  width: 40px; height: 2px; border-radius: 1px;
+  display: inline-block;
+}
+.kn-solid  { background: #7c3aed; }
+.kn-dashed { background: transparent; border-top: 2px dashed #be123c; }
+</style>
+</head>
+<body>
+
+<div class="page-title">
+  <h1>Northwind Escalation Synthesizer — Data Flow Diagram</h1>
+  <p>INC-2026-0812 &nbsp;·&nbsp; Contoso Ltd account escalation synthesis pipeline</p>
+</div>
+
+<div class="outer">
+
+  <!-- Pipeline orchestrator wrapper -->
+  <div class="orch-banner">
+    <div class="orch-label">src/pipeline.py &mdash; orchestrates steps 1 &rarr; 5 below</div>
+
+    <div class="diagram" id="diagram">
+      <svg class="arrow-svg" id="arrowSvg"></svg>
+
+      <div class="cols">
+
+        <!-- ── Col 1: Data Sources ── -->
+        <div class="col">
+          <div class="col-header">Data Sources &mdash; 7 Artifacts</div>
+
+          <div class="node t-src" id="n-zendesk">
+            <div class="n-title">zendesk_ticket.json</div>
+            <div class="n-sub">ZD-98741 · ZD-99788<br>SLA breach · customer dispute</div>
+          </div>
+
+          <div class="node t-src" id="n-slack">
+            <div class="n-title">slack_thread.json</div>
+            <div class="n-sub">#incident-order-processing<br>INC-2026-0812 thread</div>
+          </div>
+
+          <div class="node t-src" id="n-postmortem">
+            <div class="n-title">postmortem.md</div>
+            <div class="n-sub">SEV-1 postmortem<br>Root cause · declared RESOLVED</div>
+          </div>
+
+          <div class="node t-src" id="n-telemetry">
+            <div class="n-title">telemetry.json</div>
+            <div class="n-sub">Error rate timeline<br>DB pool stats · stuck orders</div>
+          </div>
+
+          <div class="node t-src" id="n-account">
+            <div class="n-title">account_summary.json</div>
+            <div class="n-sub">Contoso Ltd · Enterprise<br>Renewal risk: HIGH · $2.4M ARR</div>
+          </div>
+
+          <div class="node t-src" id="n-jira">
+            <div class="n-title">jira_tickets.json</div>
+            <div class="n-sub">Sprint 47 · 5 tickets<br>NWAPI-3341 / 3350 / 3362</div>
+          </div>
+
+          <div class="node t-src" id="n-email">
+            <div class="n-title">executive_email.md</div>
+            <div class="n-sub">VP Derek Hartley escalation<br>CEO Simon Holt CC'd</div>
+          </div>
+        </div>
+
+        <!-- ── Col 2: Artifact Loader ── -->
+        <div class="col">
+          <div class="col-header">Artifact Loader</div>
+          <div class="gap-md"></div>
+          <div class="gap-md"></div>
+
+          <div class="node t-loader" id="n-loaders">
+            <div class="n-title">src/loaders.py</div>
+            <div class="n-sub">
+              load_all(data_dir)<br><br>
+              load_zendesk()<br>
+              load_slack()<br>
+              load_postmortem()<br>
+              load_telemetry()<br>
+              load_account_summary()<br>
+              load_jira()<br>
+              load_executive_email()
+            </div>
+            <div class="n-badge b-rule">&rarr; 7 normalized artifact dicts</div>
+          </div>
+        </div>
+
+        <!-- ── Col 3: Analysis ── -->
+        <div class="col">
+          <div class="col-header">Conflict Detection</div>
+
+          <div class="node t-rule" id="n-conflict">
+            <div class="n-title">src/conflict_detector.py</div>
+            <div class="n-sub">
+              detect_all(artifacts)<br><br>
+              detect_timeline_conflicts()<br>
+              detect_status_conflicts()<br>
+              detect_orders_conflicts()<br>
+              detect_root_cause_conflicts()<br>
+              detect_revenue_conflicts()
+            </div>
+            <div class="n-badge b-rule">Rule-based &mdash; default mode</div>
+          </div>
+
+          <div class="gap-sm"></div>
+
+          <div class="node t-ai" id="n-ai">
+            <div class="n-title">src/ai_synthesizer.py</div>
+            <div class="n-sub">
+              synthesize(artifacts)<br><br>
+              run_agentic_analysis()<br>
+              flag_conflict() &mdash; agentic tool<br>
+              propose_action() &mdash; agentic tool<br>
+              generate_reports() &times; 3 streaming
+            </div>
+            <div class="n-badge b-ai">AI Mode &mdash; Claude Opus 5</div>
+          </div>
+        </div>
+
+        <!-- ── Col 4: HITL + Report Generator ── -->
+        <div class="col">
+          <div class="col-header">Review &amp; Report Generation</div>
+
+          <div class="node t-hitl" id="n-hitl">
+            <div class="n-title">src/human_in_loop.py</div>
+            <div class="n-sub">
+              build_confidence_signals()<br>
+              dri_review()<br><br>
+              Scores each conflict &amp; action<br>
+              (0.0 &ndash; 1.0 confidence)<br>
+              Auto-approves high-confidence<br>
+              Flags uncertain for human review<br>
+              Appends audit entries
+            </div>
+          </div>
+
+          <div class="gap-sm"></div>
+
+          <div class="node t-report" id="n-report">
+            <div class="n-title">src/report_generator.py</div>
+            <div class="n-sub">
+              generate_executive_summary()<br>
+              generate_conflict_report()<br>
+              generate_action_items()<br>
+              generate_customer_email()<br><br>
+              Rule-based markdown reports<br>
+              with inline source citations
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Col 5: Outputs ── -->
+        <div class="col">
+          <div class="col-header">Generated Outputs</div>
+
+          <div class="node t-log" id="n-log">
+            <div class="n-title">override_log.jsonl</div>
+            <div class="n-sub">HITL audit trail<br>Append-only · one JSON line per<br>confidence decision or override</div>
+          </div>
+
+          <div class="gap-sm"></div>
+
+          <div class="node t-out" id="n-exec">
+            <div class="n-title">executive_summary.md</div>
+            <div class="n-sub">Timeline · conflict flags · renewal risk</div>
+          </div>
+
+          <div class="node t-out" id="n-crpt">
+            <div class="n-title">conflict_report.md</div>
+            <div class="n-sub">Cross-artifact analysis · HIGH / MEDIUM</div>
+          </div>
+
+          <div class="node t-out" id="n-acts">
+            <div class="n-title">action_items.md</div>
+            <div class="n-sub">P0&ndash;P3 prioritized actions · DRI assignments</div>
+          </div>
+
+          <div class="node t-out" id="n-mail">
+            <div class="n-title">customer_email.md</div>
+            <div class="n-sub">Non-technical customer-facing email<br>to Contoso VP Derek Hartley</div>
+          </div>
+        </div>
+
+      </div><!-- /cols -->
+    </div><!-- /diagram -->
+  </div><!-- /orch-banner -->
+
+  <!-- Dashboard bar -->
+  <div class="dash-bar">
+    <h3>&#128202; dashboard.py &mdash; Streamlit Web Dashboard</h3>
+    <div class="dash-tags">
+      <span class="dash-tag dt-r">reads: zendesk_ticket.json</span>
+      <span class="dash-tag dt-r">reads: slack_thread.json</span>
+      <span class="dash-tag dt-r">reads: telemetry.json</span>
+      <span class="dash-tag dt-r">reads: account_summary.json</span>
+      <span class="dash-tag dt-r">reads: jira_tickets.json</span>
+      <span class="dash-tag dt-c">calls: loaders.load_all()</span>
+      <span class="dash-tag dt-c">calls: conflict_detector.detect_all()</span>
+      <span class="dash-tag dt-r">reads: outputs/override_log.jsonl</span>
+      <span class="dash-tag dt-s">renders: 7 Artifact Sources &middot; KPI cards &middot; Incident table</span>
+      <span class="dash-tag dt-s">renders: Error rate chart &middot; Conflict panel &middot; DRI Review</span>
+      <span class="dash-tag dt-s">renders: HITL Audit Trail &middot; Customer Email output</span>
+    </div>
+  </div>
+
+  <!-- Key note -->
+  <div class="keynote">
+    <div class="kn-item">
+      <div class="kn-line kn-solid"></div>
+      <span>Rule-based mode (default &mdash; no API key required)</span>
+    </div>
+    <div class="kn-item">
+      <div class="kn-line kn-dashed"></div>
+      <span>AI mode (requires ANTHROPIC_API_KEY &mdash; uses Claude Opus 5)</span>
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="leg"><div class="leg-dot" style="background:#2563eb"></div>Data Sources (7 artifacts)</div>
+    <div class="leg"><div class="leg-dot" style="background:#7c3aed"></div>Artifact Loader</div>
+    <div class="leg"><div class="leg-dot" style="background:#b45309"></div>Rule-based Conflict Detector</div>
+    <div class="leg"><div class="leg-dot" style="background:#be123c"></div>AI Synthesizer (Claude Opus 5)</div>
+    <div class="leg"><div class="leg-dot" style="background:#0d9488"></div>HITL Review</div>
+    <div class="leg"><div class="leg-dot" style="background:#15803d"></div>Report Generator</div>
+    <div class="leg"><div class="leg-dot" style="background:#22c55e"></div>Output Files (.md)</div>
+    <div class="leg"><div class="leg-dot" style="background:#d97706"></div>Audit Log (.jsonl)</div>
+    <div class="leg"><div class="leg-dot" style="background:#4f46e5"></div>Streamlit Dashboard</div>
+  </div>
+
+</div><!-- /outer -->
+
+<script>
+// ── Arrow drawing ──────────────────────────────────────────────
+
+function addMarkers() {
+  const svg = document.getElementById('arrowSvg');
+  let defs = svg.querySelector('defs');
+  if (!defs) {
+    defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.prepend(defs);
+  }
+  const markers = [
+    ['m-blue',   '#2563eb'],
+    ['m-purple', '#7c3aed'],
+    ['m-amber',  '#b45309'],
+    ['m-red',    '#be123c'],
+    ['m-teal',   '#0d9488'],
+    ['m-green',  '#15803d'],
+  ];
+  markers.forEach(([id, fill]) => {
+    if (defs.querySelector('#' + id)) return;
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    m.setAttribute('id', id);
+    m.setAttribute('markerWidth', '9');
+    m.setAttribute('markerHeight', '9');
+    m.setAttribute('refX', '8');
+    m.setAttribute('refY', '3');
+    m.setAttribute('orient', 'auto');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', 'M0,0 L0,6 L9,3 z');
+    p.setAttribute('fill', fill);
+    m.appendChild(p);
+    defs.appendChild(m);
+  });
+}
+
+function pos(elId, side) {
+  const el  = document.getElementById(elId);
+  const svg = document.getElementById('arrowSvg');
+  const sr  = svg.getBoundingClientRect();
+  const er  = el.getBoundingClientRect();
+  const cx  = er.left - sr.left + er.width  / 2;
+  const cy  = er.top  - sr.top  + er.height / 2;
+  if (side === 'right')  return [er.right  - sr.left, cy];
+  if (side === 'left')   return [er.left   - sr.left, cy];
+  if (side === 'top')    return [cx, er.top    - sr.top];
+  if (side === 'bottom') return [cx, er.bottom - sr.top];
+  return [cx, cy];
+}
+
+function curve(x1, y1, x2, y2, color, dashed, markerId) {
+  const svg = document.getElementById('arrowSvg');
+  const dx  = Math.abs(x2 - x1) * 0.48;
+  const d   = `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+  const p   = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('stroke', color);
+  p.setAttribute('stroke-width', '1.8');
+  p.setAttribute('fill', 'none');
+  p.setAttribute('opacity', '0.72');
+  if (dashed) p.setAttribute('stroke-dasharray', '6,4');
+  if (markerId) p.setAttribute('marker-end', `url(#${markerId})`);
+  svg.appendChild(p);
+}
+
+function drawArrows() {
+  const svg = document.getElementById('arrowSvg');
+  // Remove old paths but keep defs
+  Array.from(svg.children).forEach(c => { if (c.tagName !== 'defs') c.remove(); });
+
+  // 7 data sources → loaders
+  ['n-zendesk','n-slack','n-postmortem','n-telemetry','n-account','n-jira','n-email'].forEach(id => {
+    const [x1,y1] = pos(id, 'right');
+    const [x2,y2] = pos('n-loaders', 'left');
+    curve(x1, y1, x2, y2, '#2563eb', false, 'm-blue');
+  });
+
+  // loaders → conflict_detector (rule-based, solid)
+  {
+    const [x1,y1] = pos('n-loaders', 'right');
+    const [x2,y2] = pos('n-conflict', 'left');
+    curve(x1, y1, x2, y2, '#7c3aed', false, 'm-purple');
+  }
+
+  // loaders → ai_synthesizer (AI mode, dashed)
+  {
+    const [x1,y1] = pos('n-loaders', 'right');
+    const [x2,y2] = pos('n-ai', 'left');
+    curve(x1, y1, x2, y2, '#be123c', true, 'm-red');
+  }
+
+  // conflict_detector → hitl
+  {
+    const [x1,y1] = pos('n-conflict', 'right');
+    const [x2,y2] = pos('n-hitl', 'left');
+    curve(x1, y1, x2, y2, '#b45309', false, 'm-amber');
+  }
+
+  // conflict_detector → report_generator
+  {
+    const [x1,y1] = pos('n-conflict', 'right');
+    const [x2,y2] = pos('n-report', 'left');
+    curve(x1, y1, x2, y2, '#b45309', false, 'm-amber');
+  }
+
+  // ai_synthesizer → report_generator (AI mode, dashed)
+  {
+    const [x1,y1] = pos('n-ai', 'right');
+    const [x2,y2] = pos('n-report', 'left');
+    curve(x1, y1, x2, y2, '#be123c', true, 'm-red');
+  }
+
+  // hitl → override_log
+  {
+    const [x1,y1] = pos('n-hitl', 'right');
+    const [x2,y2] = pos('n-log', 'left');
+    curve(x1, y1, x2, y2, '#0d9488', false, 'm-teal');
+  }
+
+  // report_generator → 4 output files
+  ['n-exec','n-crpt','n-acts','n-mail'].forEach(id => {
+    const [x1,y1] = pos('n-report', 'right');
+    const [x2,y2] = pos(id, 'left');
+    curve(x1, y1, x2, y2, '#15803d', false, 'm-green');
+  });
+}
+
+function init() {
+  addMarkers();
+  drawArrows();
+}
+
+window.addEventListener('load', () => setTimeout(init, 200));
+window.addEventListener('resize', () => setTimeout(drawArrows, 60));
+</script>
+</body>
+</html>

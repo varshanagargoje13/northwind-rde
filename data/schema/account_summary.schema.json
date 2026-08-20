@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "account_summary.schema.json",
+  "title": "Customer Account Summary",
+  "description": "CRM account health summary for an enterprise customer account",
+  "type": "object",
+  "required": [
+    "account_id", "company_name", "tier",
+    "contract_value_usd_annual", "renewal_date", "renewal_risk",
+    "health_score", "nps_score"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "account_id":                  { "type": "string", "pattern": "^ACC-\\d+$" },
+    "company_name":                { "type": "string" },
+    "tier":                        { "type": "string", "enum": ["Enterprise", "Professional", "Starter"] },
+    "contract_value_usd_annual":   { "type": "number", "minimum": 0 },
+    "renewal_date":                { "type": "string", "format": "date" },
+    "renewal_risk":                { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+    "csm":                         { "type": "string" },
+    "technical_account_manager":   { "type": "string" },
+    "health_score":                { "type": "integer", "minimum": 0, "maximum": 100 },
+    "health_trend":                { "type": "string", "enum": ["improving", "stable", "declining"] },
+    "account_notes":               { "type": "string" },
+    "support_history_90d": {
+      "type": "object",
+      "required": ["total_tickets", "urgent_tickets", "average_resolution_hours", "sla_breaches"],
+      "additionalProperties": false,
+      "properties": {
+        "total_tickets":              { "type": "integer", "minimum": 0 },
+        "urgent_tickets":             { "type": "integer", "minimum": 0 },
+        "average_resolution_hours":   { "type": "number", "minimum": 0 },
+        "sla_breaches":               { "type": "integer", "minimum": 0 }
+      }
+    },
+    "current_incident": {
+      "type": "object",
+      "required": ["incident_id", "zendesk_ticket", "reported_by_customer"],
+      "additionalProperties": false,
+      "properties": {
+        "incident_id":                    { "type": "string" },
+        "zendesk_ticket":                 { "type": "string", "pattern": "^ZD-\\d+$" },
+        "reported_by_customer":           { "type": "string", "format": "date-time" },
+        "orders_flagged_as_stuck":        { "type": "integer", "minimum": 0 },
+        "estimated_revenue_at_risk_usd":  { "type": "number", "minimum": 0 },
+        "executive_escalation":           { "type": "boolean" },
+        "executive_contacted":            { "type": "string" },
+        "last_executive_update":          { "type": "string", "format": "date-time" }
+      }
+    },
+    "nps_score":          { "type": "number", "minimum": 0, "maximum": 10 },
+    "last_qbr_date":      { "type": "string", "format": "date" },
+    "products_in_use":    { "type": "array", "items": { "type": "string" } },
+    "open_feature_requests": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "priority"],
+        "additionalProperties": false,
+        "properties": {
+          "id":       { "type": "string" },
+          "title":    { "type": "string" },
+          "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+        }
+      }
+    }
+  }
+}

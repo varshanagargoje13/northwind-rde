@@ -1,0 +1,380 @@
+{
+  "generated_at": "2026-08-20T12:25:38.995939+00:00",
+  "summary": {
+    "total": 7,
+    "passed": 6,
+    "fixed": 0,
+    "flagged": 1
+  },
+  "artifacts": [
+    {
+      "source": "Zendesk",
+      "status": "PASSED",
+      "passed": 6,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "orders_affected_claim",
+          "status": "PASSED",
+          "original": 47,
+          "corrected": 47,
+          "note": "Customer order count claim"
+        },
+        {
+          "field": "sla_breach",
+          "status": "PASSED",
+          "original": true,
+          "corrected": true,
+          "note": "Valid boolean"
+        },
+        {
+          "field": "status",
+          "status": "PASSED",
+          "original": "open",
+          "corrected": "open",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "incident_start_claim",
+          "status": "PASSED",
+          "original": "2026-08-12 14:00:00+00:00",
+          "corrected": "2026-08-12 14:00:00+00:00",
+          "note": "Valid datetime"
+        },
+        {
+          "field": "resolution_status",
+          "status": "PASSED",
+          "original": "open \u2014 customer still reporting issues as of 2026-08-19",
+          "corrected": "open \u2014 customer still reporting issues as of 2026-08-19",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "comments",
+          "status": "PASSED",
+          "original": "[9 items]",
+          "corrected": "[9 items]",
+          "note": "Support comments present"
+        }
+      ]
+    },
+    {
+      "source": "Slack",
+      "status": "PASSED",
+      "passed": 5,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "message_count",
+          "status": "PASSED",
+          "original": 14,
+          "corrected": 14,
+          "note": "14 messages in thread"
+        },
+        {
+          "field": "key_contributors",
+          "status": "PASSED",
+          "original": [
+            "robert.king",
+            "nancy.davolio",
+            "janet.leverling",
+            "steven.buchanan",
+            "andrew.fuller"
+          ],
+          "corrected": [
+            "robert.king",
+            "nancy.davolio",
+            "janet.leverling",
+            "steven.buchanan",
+            "andrew.fuller"
+          ],
+          "note": "5 contributor(s): robert.king, nancy.davolio, janet.leverling\u2026"
+        },
+        {
+          "field": "incident_start_claim",
+          "status": "PASSED",
+          "original": "2026-08-11 18:00:00+00:00",
+          "corrected": "2026-08-11 18:00:00+00:00",
+          "note": "Valid datetime"
+        },
+        {
+          "field": "channel",
+          "status": "PASSED",
+          "original": "#incident-order-processing",
+          "corrected": "#incident-order-processing",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "root_cause_claim",
+          "status": "PASSED",
+          "original": "API gateway v2.4.1 connection leak (per janet.leverling & steven.buchanan)",
+          "corrected": "API gateway v2.4.1 connection leak (per janet.leverling & steven.buchanan)",
+          "note": "Non-empty string"
+        }
+      ]
+    },
+    {
+      "source": "Postmortem",
+      "status": "PASSED",
+      "passed": 6,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "orders_affected_claim",
+          "status": "PASSED",
+          "original": 23,
+          "corrected": 23,
+          "note": "Valid positive integer"
+        },
+        {
+          "field": "root_cause_claim",
+          "status": "PASSED",
+          "original": "DB migration script migrate_orders_v12.sql caused index corruption on orders.status_idx",
+          "corrected": "DB migration script migrate_orders_v12.sql caused index corruption on orders.status_idx",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "resolution_time",
+          "status": "PASSED",
+          "original": "2026-08-14 16:00:00+00:00",
+          "corrected": "2026-08-14 16:00:00+00:00",
+          "note": "Resolution is after incident start \u2713"
+        },
+        {
+          "field": "duration_hours",
+          "status": "PASSED",
+          "original": 17,
+          "corrected": 17,
+          "note": "Positive duration"
+        },
+        {
+          "field": "action_items",
+          "status": "PASSED",
+          "original": "[3 items]",
+          "corrected": "[3 items]",
+          "note": "3 post-incident action item(s) present"
+        },
+        {
+          "field": "status",
+          "status": "PASSED",
+          "original": "approved",
+          "corrected": "approved",
+          "note": "Non-empty string"
+        }
+      ]
+    },
+    {
+      "source": "Telemetry",
+      "status": "PASSED",
+      "passed": 6,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "current_error_rate_pct",
+          "status": "PASSED",
+          "original": 1.4,
+          "corrected": 1.4,
+          "note": "In valid range [0, 100]"
+        },
+        {
+          "field": "peak_error_rate_pct",
+          "status": "PASSED",
+          "original": 52.3,
+          "corrected": 52.3,
+          "note": "Peak 52.3% \u2265 current 1.4% \u2713"
+        },
+        {
+          "field": "stuck_orders_count",
+          "status": "PASSED",
+          "original": 31,
+          "corrected": 31,
+          "note": "Valid non-negative integer"
+        },
+        {
+          "field": "connection_pool_max",
+          "status": "PASSED",
+          "original": 200,
+          "corrected": 200,
+          "note": "Valid pool size"
+        },
+        {
+          "field": "incident_start_claim",
+          "status": "PASSED",
+          "original": "2026-08-11 18:00:00+00:00",
+          "corrected": "2026-08-11 18:00:00+00:00",
+          "note": "Valid datetime"
+        },
+        {
+          "field": "current_status",
+          "status": "PASSED",
+          "original": "degraded",
+          "corrected": "degraded",
+          "note": "Non-empty string"
+        }
+      ]
+    },
+    {
+      "source": "Account Summary",
+      "status": "PASSED",
+      "passed": 7,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "health_score",
+          "status": "PASSED",
+          "original": 42,
+          "corrected": 42,
+          "note": "In valid range [0, 100]"
+        },
+        {
+          "field": "nps_score",
+          "status": "PASSED",
+          "original": 6,
+          "corrected": 6,
+          "note": "In valid range [0, 10]"
+        },
+        {
+          "field": "renewal_risk",
+          "status": "PASSED",
+          "original": "HIGH",
+          "corrected": "HIGH",
+          "note": "Valid enum value"
+        },
+        {
+          "field": "contract_value_usd",
+          "status": "PASSED",
+          "original": 480000,
+          "corrected": 480000,
+          "note": "Valid positive value"
+        },
+        {
+          "field": "sla_breaches_90d",
+          "status": "PASSED",
+          "original": 2,
+          "corrected": 2,
+          "note": "Valid non-negative integer"
+        },
+        {
+          "field": "customer",
+          "status": "PASSED",
+          "original": "Contoso Ltd",
+          "corrected": "Contoso Ltd",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "renewal_date",
+          "status": "PASSED",
+          "original": "2026-12-01",
+          "corrected": "2026-12-01",
+          "note": "Non-empty string"
+        }
+      ]
+    },
+    {
+      "source": "Jira",
+      "status": "FLAGGED",
+      "passed": 3,
+      "fixed": 0,
+      "flagged": 2,
+      "checks": [
+        {
+          "field": "total_vs_open_tickets",
+          "status": "PASSED",
+          "original": "5/3",
+          "corrected": "5/3",
+          "note": "Total \u2265 open tickets \u2713"
+        },
+        {
+          "field": "critical_open_tickets",
+          "status": "PASSED",
+          "original": "[2 items]",
+          "corrected": "[2 items]",
+          "note": "2 critical open ticket(s)"
+        },
+        {
+          "field": "known_affected_orders",
+          "status": "PASSED",
+          "original": "[2 items]",
+          "corrected": "[2 items]",
+          "note": "2 known order(s)"
+        },
+        {
+          "field": "NWAPI-3362.assignee",
+          "status": "FLAGGED",
+          "original": "Unassigned",
+          "corrected": "Unassigned",
+          "note": "CRITICAL: NWAPI-3362 (stuck orders) is UNASSIGNED \u2014 requires immediate action"
+        },
+        {
+          "field": "ENG-3321.status",
+          "status": "FLAGGED",
+          "original": "Backlog",
+          "corrected": "Backlog",
+          "note": "ENG-3321 (cache invalidation) is in Backlog \u2014 known contributing factor, needs reprioritisation"
+        }
+      ]
+    },
+    {
+      "source": "Executive Email",
+      "status": "PASSED",
+      "passed": 7,
+      "fixed": 0,
+      "flagged": 0,
+      "checks": [
+        {
+          "field": "renewal_threat",
+          "status": "PASSED",
+          "original": true,
+          "corrected": true,
+          "note": "Valid boolean"
+        },
+        {
+          "field": "orders_affected_claim",
+          "status": "PASSED",
+          "original": 47,
+          "corrected": 47,
+          "note": "VP-claimed order count"
+        },
+        {
+          "field": "sender",
+          "status": "PASSED",
+          "original": "Derek Hartley <d.hartley@contoso-ltd.com>",
+          "corrected": "Derek Hartley <d.hartley@contoso-ltd.com>",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "subject",
+          "status": "PASSED",
+          "original": "[URGENT ESCALATION] Complete order processing failure \u2014 Contoso Ltd \u2014 CEO CC'd",
+          "corrected": "[URGENT ESCALATION] Complete order processing failure \u2014 Contoso Ltd \u2014 CEO CC'd",
+          "note": "Non-empty string"
+        },
+        {
+          "field": "executive_requests",
+          "status": "PASSED",
+          "original": "[5 items]",
+          "corrected": "[5 items]",
+          "note": "5 executive request(s) captured"
+        },
+        {
+          "field": "revenue_at_risk_usd",
+          "status": "PASSED",
+          "original": 200000,
+          "corrected": 200000,
+          "note": "$200,000 at risk \u2014 documented"
+        },
+        {
+          "field": "incident_start_claim",
+          "status": "PASSED",
+          "original": "2026-08-12 13:00:00+00:00",
+          "corrected": "2026-08-12 13:00:00+00:00",
+          "note": "Valid datetime"
+        }
+      ]
+    }
+  ]
+}
