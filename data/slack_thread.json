@@ -44,6 +44,16 @@
       "text": "Restarted connection pool manager. Error rate dropping. But still seeing ~8% failures. Root cause is connection pool exhaustion, NOT the gateway."
     },
     {
+      "user": "janet.leverling",
+      "timestamp": "2026-08-12T15:28:00Z",
+      "text": "Just cross-referenced the affected orders — these are international orders only. Domestic orders are processing fine. Could be a routing issue in the new gateway for non-US endpoints. @steven.buchanan did v2.4.1 change anything in the international routing config?"
+    },
+    {
+      "user": "steven.buchanan",
+      "timestamp": "2026-08-12T15:41:00Z",
+      "text": "Yes — v2.4.1 introduced a new connection pool per region for international routing. That pool was sized at 50 connections vs 200 for domestic. That's your bottleneck. International-only scope confirmed."
+    },
+    {
       "user": "andrew.fuller",
       "timestamp": "2026-08-13T09:00:00Z",
       "text": "We ran a DB migration script last night (Aug 12 → 13) around 11pm. Rebuilt some indexes on orders table. Could that have caused Monday's issue? Timeline doesn't add up."
