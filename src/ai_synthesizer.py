@@ -170,13 +170,27 @@ def run_agentic_analysis(artifacts: list[dict]) -> tuple[list[dict], list[dict]]
 
     print("  Running agentic analysis (claude-opus-5 + Tool Runner)...\n", flush=True)
 
+    # cache_control on both the system prompt and the large artifact context block
+    # so repeated tool-loop turns reuse the cached prefix instead of re-tokenizing
+    cached_system = [
+        {"type": "text", "text": ANALYSIS_SYSTEM, "cache_control": {"type": "ephemeral"}}
+    ]
+    cached_messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}}
+            ],
+        }
+    ]
+
     runner = client.beta.messages.tool_runner(
         model=MODEL,
         max_tokens=16000,
         thinking={"type": "adaptive"},
         tools=[flag_conflict, add_action_item],
-        system=ANALYSIS_SYSTEM,
-        messages=[{"role": "user", "content": context}],
+        system=cached_system,
+        messages=cached_messages,
     )
 
     for _ in runner:
@@ -193,17 +207,41 @@ _REPORT_SYSTEM = """You are a senior technical account manager writing urgent es
 Be precise, specific, and cite sources explicitly with [Source Name] notation.
 Do not hedge — state what the data shows. Surface the risk clearly."""
 
+# Cached system block — same for all 3 report calls; only tokenized once per session
+_CACHED_REPORT_SYSTEM = [
+    {"type": "text", "text": _REPORT_SYSTEM, "cache_control": {"type": "ephemeral"}}
+]
 
-def _stream_report(client: anthropic.Anthropic, prompt: str, label: str) -> str:
-    """Stream a single report from Claude, printing progress, returning full text."""
+
+def _stream_report(
+    client: anthropic.Anthropic,
+    cached_ctx_block: dict,
+    report_prompt: str,
+    label: str,
+) -> str:
+    """
+    Stream one report from Claude.
+
+    cached_ctx_block  — shared context content block with cache_control (reused across
+                        all 3 calls; only billed as input tokens on the first call).
+    report_prompt     — the per-report instruction (not cached; unique per call).
+    """
     print(f"  Streaming [{label}]...", end=" ", flush=True)
     full_text = ""
     with client.messages.stream(
         model=MODEL,
         max_tokens=8000,
         thinking={"type": "adaptive"},
-        system=_REPORT_SYSTEM,
-        messages=[{"role": "user", "content": prompt}],
+        system=_CACHED_REPORT_SYSTEM,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    cached_ctx_block,                         # cached — free on calls 2 & 3
+                    {"type": "text", "text": report_prompt},  # unique per report
+                ],
+            }
+        ],
     ) as stream:
         for text in stream.text_stream:
             full_text += text
@@ -222,28 +260,38 @@ def generate_reports(
     """
     client = anthropic.Anthropic()
 
-    # Build shared context block
-    account = next((a for a in artifacts if a["source"] == "Account Summary"), {})
+    # Build shared context — same text for all 3 reports; cache it so calls 2 & 3 are free
+    account   = next((a for a in artifacts if a["source"] == "Account Summary"), {})
     telemetry = next((a for a in artifacts if a["source"] == "Telemetry"), {})
-    jira = next((a for a in artifacts if a["source"] == "Jira"), {})
-    email = next((a for a in artifacts if a["source"] == "Executive Email"), {})
+    jira      = next((a for a in artifacts if a["source"] == "Jira"), {})
+    email     = next((a for a in artifacts if a["source"] == "Executive Email"), {})
 
-    ctx = f"""CUSTOMER: {account.get('customer')} ({account.get('tier')})
-CONTRACT: ${account.get('contract_value_usd', 0):,}/year | Renewal: {account.get('renewal_date')} | Risk: {account.get('renewal_risk')}
-HEALTH: {account.get('health_score')}/100 (declining) | NPS: {account.get('nps_score')}/10
-EXEC CONTACT: {account.get('executive_contact')} | VP email received: {email.get('date', 'N/A')}
-CURRENT ERROR RATE: {telemetry.get('current_error_rate_pct')}% (baseline 0.2%) | STATUS: {telemetry.get('current_status', '').upper()}
-STUCK ORDERS: {telemetry.get('stuck_orders_count')} (telemetry) | Known: {', '.join(jira.get('known_affected_orders', []))}
-OPEN JIRA: {', '.join(jira.get('critical_open_tickets', []))}
-
-AI-DETECTED CONFLICTS ({len(ai_conflicts)}):
-""" + "\n".join(
-        f"  [{c['severity']}] {c['category']}: {c['description']}"
-        for c in ai_conflicts
-    ) + f"\n\nAI-DETECTED ACTIONS ({len(ai_actions)}):\n" + "\n".join(
-        f"  [{a['priority']}] {a['title']} (Owner: {a['owner']})"
-        for a in ai_actions
+    ctx = (
+        f"CUSTOMER: {account.get('customer')} ({account.get('tier')})\n"
+        f"CONTRACT: ${account.get('contract_value_usd', 0):,}/year | "
+        f"Renewal: {account.get('renewal_date')} | Risk: {account.get('renewal_risk')}\n"
+        f"HEALTH: {account.get('health_score')}/100 (declining) | NPS: {account.get('nps_score')}/10\n"
+        f"EXEC CONTACT: {account.get('executive_contact')} | VP email received: {email.get('date', 'N/A')}\n"
+        f"CURRENT ERROR RATE: {telemetry.get('current_error_rate_pct')}% (baseline 0.2%) | "
+        f"STATUS: {telemetry.get('current_status', '').upper()}\n"
+        f"STUCK ORDERS: {telemetry.get('stuck_orders_count')} (telemetry) | "
+        f"Known: {', '.join(jira.get('known_affected_orders', []))}\n"
+        f"OPEN JIRA: {', '.join(jira.get('critical_open_tickets', []))}\n\n"
+        f"AI-DETECTED CONFLICTS ({len(ai_conflicts)}):\n"
+        + "\n".join(
+            f"  [{c['severity']}] {c['category']}: {c['description']}"
+            for c in ai_conflicts
+        )
+        + f"\n\nAI-DETECTED ACTIONS ({len(ai_actions)}):\n"
+        + "\n".join(
+            f"  [{a['priority']}] {a['title']} (Owner: {a['owner']})"
+            for a in ai_actions
+        )
     )
+
+    # Single cached content block — Anthropic bills input tokens only on the first hit;
+    # the second and third streaming calls read from the prompt cache at ~10% of the cost.
+    cached_ctx_block = {"type": "text", "text": ctx, "cache_control": {"type": "ephemeral"}}
 
     # ── Executive Summary ──────────────────────────────────────────────────────
     exec_prompt = f"""Write a complete Executive Escalation Summary for this incident.
@@ -301,10 +349,10 @@ Format as markdown:
 End with a 'Conflict-Driven Items' section noting which actions exist specifically
 because of cross-source conflicts. Cite every source."""
 
-    print("\n  Generating 3 reports via streaming:\n", flush=True)
-    exec_summary = _stream_report(client, exec_prompt, "Executive Summary")
-    conflict_report = _stream_report(client, conflict_prompt, "Conflict Report")
-    action_items = _stream_report(client, action_prompt, "Action Items")
+    print("\n  Generating 3 reports via streaming (ctx cached across calls):\n", flush=True)
+    exec_summary    = _stream_report(client, cached_ctx_block, exec_prompt,     "Executive Summary")
+    conflict_report = _stream_report(client, cached_ctx_block, conflict_prompt, "Conflict Report")
+    action_items    = _stream_report(client, cached_ctx_block, action_prompt,   "Action Items")
 
     return exec_summary, conflict_report, action_items
 
