@@ -141,6 +141,31 @@ with col_h2:
 st.divider()
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 7 ARTIFACT SOURCES
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### 7 Artifact Sources")
+artifacts_display = [
+    ("🎫", "Zendesk",      "ZD-98741 · ZD-99788"),
+    ("💬", "Slack",        "#incident · 16 msgs"),
+    ("📋", "Postmortem",   "APPROVED · INC-0812"),
+    ("📊", "Telemetry",    "DEGRADED · 1.4% error rate"),
+    ("🏢", "Account",      f"Health {account['health_score']} · HIGH risk"),
+    ("🔖", "Jira",         "5 tickets · 2 open"),
+    ("✉️", "Exec Email",   "VP + CEO escalated"),
+]
+art_cols = st.columns(7)
+for col, (icon, name, status) in zip(art_cols, artifacts_display):
+    col.markdown(f"""
+    <div class='artifact-box'>
+        <div class='artifact-icon'>{icon}</div>
+        <div class='artifact-name'>{name}</div>
+        <div class='artifact-status' style='color:#f59e0b;'>{status}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
 # KPI TILES
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("### KPIs")
@@ -356,31 +381,6 @@ with col_hitl:
         audit_html += f"<div style='font-size:10px;color:#475569;margin-top:5px;'>+ {len(override_log)-7} more entries</div>"
     audit_html += "</div>"
     st.markdown(audit_html, unsafe_allow_html=True)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 7 ARTIFACT SOURCES
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### 7 Artifact Sources")
-artifacts = [
-    ("🎫", "Zendesk",      "ZD-98741 · ZD-99788",        "conflict"),
-    ("💬", "Slack",        "#incident · 16 msgs",         "conflict"),
-    ("📋", "Postmortem",   "APPROVED · INC-0812",         "conflict"),
-    ("📊", "Telemetry",    "DEGRADED · 1.4% error rate",  "conflict"),
-    ("🏢", "Account",      f"Health {account['health_score']} · HIGH risk","conflict"),
-    ("🔖", "Jira",         "5 tickets · 2 open",          "conflict"),
-    ("✉️", "Exec Email",   "VP + CEO escalated",          "conflict"),
-]
-cols = st.columns(7)
-for col, (icon, name, status, state) in zip(cols, artifacts):
-    col.markdown(f"""
-    <div class='artifact-box'>
-        <div class='artifact-icon'>{icon}</div>
-        <div class='artifact-name'>{name}</div>
-        <div class='artifact-status' style='color:#f59e0b;'>{status}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # BEFORE / AFTER
