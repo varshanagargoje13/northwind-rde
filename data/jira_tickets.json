@@ -17,7 +17,39 @@
       "estimated_orders_impacted": "60+",
       "fix_description": "Added connection release in finally block for all order query handlers. Pool size temporarily increased to 350.",
       "fix_deployed": "2026-08-14T16:00:00Z",
-      "linked_issues": ["NWAPI-3298", "NWAPI-3350"]
+      "linked_issues": ["NWAPI-3298", "NWAPI-3350"],
+      "comments": [
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-12T15:45:00Z",
+          "body": "Confirmed connection pool is maxing out at 200. Seeing FATAL: sorry, too many clients already in pg_log. This started right after the v2.4.1 gateway deploy at 17:28 UTC yesterday. Assigning to Steven as he owns the gateway change."
+        },
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-12T17:10:00Z",
+          "body": "Reproducing locally. The new request routing in v2.4.1 opens a connection per route match and doesn't close it on 4xx responses. We're leaking ~3 connections per failed order request. Under the current load that compounds fast. Hotfix in progress — adding explicit connection release in the finally block."
+        },
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-08-13T09:00:00Z",
+          "body": "Pool size bumped to 350 as a temporary mitigation — bought us some headroom. Error rate dropped from 52% to 18%. Still degraded. Steven, what's the ETA on the finally-block fix? Contoso VP has escalated to our CEO."
+        },
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-13T11:30:00Z",
+          "body": "Fix is in PR review now. Also flagging: international orders are being hit first because their connection pool segment is configured at 50 (vs 200 for domestic). Once intl pool exhausts, those orders fail immediately. That explains why Contoso (all international orders) is seeing 100% failure while domestic customers are mostly fine. Linking ENG-3321 — the cache invalidation gap is making this worse under pool pressure."
+        },
+        {
+          "author": "Janet Leverling",
+          "timestamp": "2026-08-14T15:45:00Z",
+          "body": "PR merged and deployed at 16:00 UTC. Monitoring shows error rate down to 1.4%. Pool utilisation back to 42%. Marking fix deployed but leaving ticket In Review — we still need to reconcile the stuck orders (see NWAPI-3362) and confirm the international pool size is brought to parity with domestic."
+        },
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-18T14:00:00Z",
+          "body": "Code review complete. Confirmed connection release is working in staging under 2x load. One outstanding action: international segment pool size (currently 50) should be raised to 200 to match domestic. Raising a follow-up task. Ticket staying In Review until that config change is deployed."
+        }
+      ]
     },
     {
       "id": "NWAPI-3350",
@@ -34,7 +66,39 @@
       "estimated_orders_impacted": "23",
       "fix_description": "Manually rebuilt index. Added index validation to migration checklist.",
       "fix_deployed": "2026-08-14T14:30:00Z",
-      "linked_issues": ["NWAPI-3341"]
+      "linked_issues": ["NWAPI-3341"],
+      "comments": [
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-08-13T09:45:00Z",
+          "body": "Found it. migrate_orders_v12.sql included a REINDEX CONCURRENTLY step that was not in the pre-migration review checklist. The step failed midway — index is now in INVALID state. Every order status query is doing a full sequential scan on a 14M-row table. That's why latency jumped to 8000ms. This is separate from the connection pool issue in NWAPI-3341 — we have two overlapping root causes."
+        },
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-13T10:15:00Z",
+          "body": "Confirmed invalid index via: SELECT indexname, indisvalid FROM pg_indexes JOIN pg_index ON ... WHERE indexname = 'status_idx'; Returns indisvalid = false. Rebuilding manually now with REINDEX INDEX CONCURRENTLY status_idx. ETA ~40 minutes given table size."
+        },
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-08-13T11:00:00Z",
+          "body": "Why was this migration run without the index validation pre-flight check? @Steven Buchanan — the checklist in confluence says we must run EXPLAIN on affected queries after any schema change. This was skipped. Adding a mandatory validation gate as a post-incident action item."
+        },
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-13T11:20:00Z",
+          "body": "Agreed — this is a process gap. The migration was fast-tracked to support the v2.4.1 rollout and the pre-flight was abbreviated. I own that. Will add the index validation step and propose we require explicit sign-off from a second engineer before any production schema change going forward."
+        },
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-14T14:30:00Z",
+          "body": "Index rebuild complete. Latency back to baseline (avg 42ms). Full table scans gone. Marking fix deployed. Note: postmortem attributes 23 orders directly to the index corruption window — but Contoso claims 47 stuck orders, so the two root causes (connection pool + index) have overlapping impact ranges that we haven't fully disentangled yet."
+        },
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-08-14T17:00:00Z",
+          "body": "Closing as Done. Post-incident action items logged: (1) index validation added to migration checklist (Steven Buchanan, due Aug 23), (2) mandatory second-engineer approval for prod schema changes (Andrew Fuller, due Aug 23). See postmortem INC-2026-0812 for full details."
+        }
+      ]
     },
     {
       "id": "NWAPI-3298",
@@ -50,7 +114,29 @@
       "deployed_at": "2026-08-11T17:28:00Z",
       "canary_percentage": 10,
       "canary_result": "Passed",
-      "linked_issues": ["NWAPI-3341"]
+      "linked_issues": ["NWAPI-3341"],
+      "comments": [
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-08T10:30:00Z",
+          "body": "Starting upgrade from v2.3.9 to v2.4.1. Key changes in this version: TLS 1.3 enforcement, new request routing engine (per-route connection handling), and updated rate limiting headers. Canary at 10% traffic first. Load test suite running in staging."
+        },
+        {
+          "author": "Janet Leverling",
+          "timestamp": "2026-08-10T14:00:00Z",
+          "body": "Staging load test passed. 10% canary deployed to prod at 09:00 UTC this morning. No anomalies in the canary cohort after 5 hours of observation. Error rate flat at 0.19%. Approving full rollout for tomorrow."
+        },
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-11T17:28:00Z",
+          "body": "Full rollout complete at 17:28 UTC. All traffic now on v2.4.1. Initial metrics look clean — p99 latency 180ms, error rate 0.2%. Marking Done. Monitoring for 24 hours as standard post-deploy protocol."
+        },
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-12T16:00:00Z",
+          "body": "Retrospectively linking this to NWAPI-3341. The connection leak in the per-route connection handler introduced in v2.4.1 is the upstream cause of the pool exhaustion. The 10% canary did not catch it because the leak rate is low per-request — it only compounds under sustained load over several hours. Canary window (5 hours at 10%) was not long enough to surface it."
+        }
+      ]
     },
     {
       "id": "NWAPI-3362",
@@ -67,7 +153,29 @@
       "estimated_orders_impacted": "unknown — cleanup needed",
       "fix_description": null,
       "fix_deployed": null,
-      "linked_issues": ["NWAPI-3341", "NWAPI-3350"]
+      "linked_issues": ["NWAPI-3341", "NWAPI-3350"],
+      "comments": [
+        {
+          "author": "Robert King",
+          "timestamp": "2026-08-19T08:45:00Z",
+          "body": "Customer (Contoso Ltd, TAM: Robert King) reported this morning that ORD-55892 and ORD-55901 are still in PROCESSING state as of 08:30 UTC. The incident cleanup job (run Aug 14) was supposed to recover all stuck orders — it clearly missed at least these two. Both are international orders. This ticket is blocking the customer from closing ZD-98741 and ZD-99788. URGENT: VP escalation active, renewal at risk."
+        },
+        {
+          "author": "Laura Callahan",
+          "timestamp": "2026-08-19T09:10:00Z",
+          "body": "Confirming from Zendesk side — Margaret Peacock (Contoso) reported both orders in her update this morning (ZD-98741 comment at 09:22 UTC). She is also disputing our stated order count of 23 total affected orders — Contoso alone has 47 stuck. We need an engineer assigned to this immediately and a query run against all orders in PROCESSING state since 2026-08-11. This is OPEN and UNASSIGNED which is unacceptable given the exec escalation."
+        },
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-08-19T09:30:00Z",
+          "body": "The cleanup job log from Aug 14 shows it ran against orders flagged during the NWAPI-3350 index corruption window (23 orders, Aug 13 23:00 – Aug 14 14:30 UTC). It did NOT cover orders that got stuck during the connection pool exhaustion window (NWAPI-3341, Aug 11 18:00 – Aug 14 16:00). ORD-55892 and ORD-55901 likely got stuck during the earlier window and were never in the cleanup job's scope. This is the gap. We need a broader query: all orders in PROCESSING state since 2026-08-11 00:00 UTC."
+        },
+        {
+          "author": "Nancy Davolio",
+          "timestamp": "2026-08-19T10:00:00Z",
+          "body": "Running the broader query now. SELECT id, status, created_at, customer_id FROM orders WHERE status = 'PROCESSING' AND created_at >= '2026-08-11' AND updated_at < '2026-08-19'. Will report count and affected customer list. This will also give us the true total order impact count to reconcile against the 23 in the postmortem vs. 47 claimed by Contoso. Assigning myself temporarily until we identify the right engineer."
+        }
+      ]
     },
     {
       "id": "ENG-3321",
@@ -86,7 +194,29 @@
       "fix_deployed": null,
       "deferred_reason": "Medium priority — backlogged before Aug 2026 incident. Known issue that was deprioritized.",
       "smoking_gun_note": "The smoking gun: known issue deprioritized",
-      "linked_issues": ["NWAPI-3341", "NWAPI-3362"]
+      "linked_issues": ["NWAPI-3341", "NWAPI-3362"],
+      "comments": [
+        {
+          "author": "Janet Leverling",
+          "timestamp": "2026-07-15T11:00:00Z",
+          "body": "Identified during July load testing. Under sustained pool pressure (>80% utilisation), the order status cache eviction job falls behind — stale PROCESSING entries can persist for 8–12 minutes after the actual order state changes. In normal operation this is tolerable. Under incident conditions it could mask recovery and cause customers to see stale order states. Logging as medium — recommending we fix before Q4 load season. Cache hit rate degraded from 84% to 11% during the test run."
+        },
+        {
+          "author": "Andrew Fuller",
+          "timestamp": "2026-07-22T14:30:00Z",
+          "body": "Reviewed. Agreed it's a real issue but the blast radius under normal load is small. Deprioritizing to Backlog — Q3 sprint capacity is allocated to the gateway upgrade (NWAPI-3298) and the auth refactor. Will revisit in October sprint planning. Janet, please add this to the tech debt tracker."
+        },
+        {
+          "author": "Janet Leverling",
+          "timestamp": "2026-08-01T09:00:00Z",
+          "body": "Added to tech debt tracker. Flagging that NWAPI-3298 (gateway upgrade) is shipping this month — if v2.4.1 changes connection handling behaviour, this cache issue could interact. Recommend we monitor cache hit rates post-deploy. Last updated: adding this note before sprint closes."
+        },
+        {
+          "author": "Steven Buchanan",
+          "timestamp": "2026-08-13T11:30:00Z",
+          "body": "Linking this retrospectively to the Aug 12 incident. During the connection pool exhaustion window, cache hit rate dropped from 84% baseline to 11% — exactly the pattern Janet flagged in July. Stale PROCESSING entries in the cache meant customers saw their orders as 'stuck' even during partial recovery windows. This is a contributing factor to Contoso's experience of the incident. We should reprioritize this from Backlog to High and assign for Q3. The 'medium risk' judgement in July did not account for the compounding effect under a multi-factor incident."
+        }
+      ]
     }
   ]
 }
