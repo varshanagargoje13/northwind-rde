@@ -12,20 +12,30 @@ def _parse_iso(ts: str) -> datetime:
 
 def load_zendesk(path: Path) -> dict:
     raw = json.loads(path.read_text(encoding="utf-8"))
+    # Primary ticket ZD-98741; dispute ticket ZD-99788 is linked
+    primary = next(t for t in raw["tickets"] if t["ticket_id"] == "ZD-98741")
+    dispute  = next((t for t in raw["tickets"] if t["ticket_id"] == "ZD-99788"), {})
+
+    # Collect all disputes from ZD-99788
+    customer_disputes = dispute.get("customer_disputes", [])
+
     return {
         "source": "Zendesk",
-        "ticket_id": raw["ticket_id"],
-        "status": raw["status"],
-        "priority": raw["priority"],
-        "reported_at": _parse_iso(raw["created_at"]),
+        "ticket_id": primary["ticket_id"],
+        "linked_dispute_ticket": dispute.get("ticket_id"),
+        "status": primary["status"],
+        "priority": primary["priority"],
+        "reported_at": _parse_iso(primary["created_at"]),
         "incident_start_claim": _parse_iso("2026-08-12T14:00:00Z"),
         "orders_affected_claim": 47,
         "root_cause_claim": "recent infrastructure change (unspecified)",
         "resolution_status": "open — customer still reporting issues as of 2026-08-19",
-        "sla_breach": raw["sla_breach"],
-        "customer": raw["requester"]["organization"],
+        "sla_breach": primary["sla_breach"],
+        "customer": primary["requester"]["organization"],
         "revenue_at_risk_usd": None,
-        "comments": raw["comments"],
+        "scope_dispute": "international orders only — domestic fine throughout",
+        "customer_disputes": customer_disputes,
+        "comments": primary["comments"] + dispute.get("comments", []),
         "raw": raw,
     }
 

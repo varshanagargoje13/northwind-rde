@@ -1,41 +1,116 @@
 {
-  "ticket_id": "ZD-98741",
-  "created_at": "2026-08-12T14:07:33Z",
-  "updated_at": "2026-08-19T09:22:11Z",
-  "status": "open",
-  "priority": "urgent",
-  "requester": {
-    "name": "Margaret Peacock",
-    "email": "m.peacock@contoso-ltd.com",
-    "organization": "Contoso Ltd"
-  },
-  "assignee": "Laura Callahan",
-  "subject": "Order processing completely broken - urgent escalation needed",
-  "description": "Our entire procurement team has been unable to place or track orders since Tuesday Aug 12 at approximately 2:00 PM EST. We are seeing API timeout errors on every order submission. As of today, 47 orders are stuck in 'Processing' state with no movement. This is critically impacting our supply chain. We have a $200K shipment that needed to go out Friday.",
-  "tags": ["escalation", "order-processing", "api-timeout", "enterprise"],
-  "sla_breach": true,
-  "first_response_time_hours": 4.5,
-  "csat_score": null,
-  "comments": [
+  "tickets": [
     {
-      "author": "Laura Callahan",
-      "timestamp": "2026-08-12T18:30:00Z",
-      "body": "I've escalated this to engineering. They are investigating the order processing pipeline. We believe this is related to a recent infrastructure change."
+      "ticket_id": "ZD-98741",
+      "created_at": "2026-08-12T14:07:33Z",
+      "updated_at": "2026-08-19T09:22:11Z",
+      "status": "open",
+      "priority": "urgent",
+      "requester": {
+        "name": "Margaret Peacock",
+        "email": "m.peacock@contoso-ltd.com",
+        "organization": "Contoso Ltd"
+      },
+      "assignee": "Laura Callahan",
+      "subject": "Order processing completely broken - urgent escalation needed",
+      "description": "Our entire procurement team has been unable to place or track orders since Tuesday Aug 12 at approximately 2:00 PM EST. We are seeing API timeout errors on every order submission. As of today, 47 orders are stuck in 'Processing' state with no movement. This is critically impacting our supply chain. We have a $200K shipment that needed to go out Friday.",
+      "tags": ["escalation", "order-processing", "api-timeout", "enterprise"],
+      "sla_breach": true,
+      "first_response_time_hours": 4.5,
+      "csat_score": null,
+      "comments": [
+        {
+          "author": "Laura Callahan",
+          "timestamp": "2026-08-12T18:30:00Z",
+          "body": "I've escalated this to engineering. They are investigating the order processing pipeline. We believe this is related to a recent infrastructure change."
+        },
+        {
+          "author": "Margaret Peacock",
+          "timestamp": "2026-08-13T08:15:00Z",
+          "body": "Still not working this morning. My VP is now involved. We need an RCA and timeline for resolution TODAY."
+        },
+        {
+          "author": "Laura Callahan",
+          "timestamp": "2026-08-14T11:00:00Z",
+          "body": "Engineering says the root issue was a database migration that ran Wednesday night. A fix is being deployed."
+        },
+        {
+          "author": "Margaret Peacock",
+          "timestamp": "2026-08-14T17:45:00Z",
+          "body": "DISPUTE: Your team says 'database migration Wednesday night' caused this. That is NOT what we saw. Our orders started failing Monday afternoon — Aug 12 around 2pm EST. Wednesday was not our first failure. You have the wrong root cause. Also — only our international orders are affected. Our domestic POs are going through fine. This is not a full outage on your side — it is specific to international routing."
+        },
+        {
+          "author": "Laura Callahan",
+          "timestamp": "2026-08-15T09:00:00Z",
+          "body": "Thank you for flagging the international-only pattern. I've passed this to engineering. Regarding the timeline — we'll reconcile this in the RCA. We show first anomalies Aug 11 evening but will confirm."
+        },
+        {
+          "author": "Margaret Peacock",
+          "timestamp": "2026-08-19T09:22:11Z",
+          "body": "Still seeing intermittent failures on order #ORD-55892 and #ORD-55901. Both are international orders. Domestic orders fine. This is NOT resolved. Your postmortem says 23 orders affected — we alone have 47 stuck. Your numbers are wrong."
+        }
+      ]
     },
     {
-      "author": "Margaret Peacock",
-      "timestamp": "2026-08-13T08:15:00Z",
-      "body": "Still not working this morning. My VP is now involved. We need an RCA and timeline for resolution TODAY."
-    },
-    {
-      "author": "Laura Callahan",
-      "timestamp": "2026-08-14T11:00:00Z",
-      "body": "Engineering says the root issue was a database migration that ran Wednesday night. A fix is being deployed."
-    },
-    {
-      "author": "Margaret Peacock",
-      "timestamp": "2026-08-19T09:22:11Z",
-      "body": "We are still seeing intermittent failures on order #ORD-55892 and #ORD-55901. This is NOT resolved."
+      "ticket_id": "ZD-99788",
+      "created_at": "2026-08-15T10:30:00Z",
+      "updated_at": "2026-08-19T11:00:00Z",
+      "status": "open",
+      "priority": "high",
+      "requester": {
+        "name": "Margaret Peacock",
+        "email": "m.peacock@contoso-ltd.com",
+        "organization": "Contoso Ltd"
+      },
+      "assignee": "Laura Callahan",
+      "subject": "Follow-up: Dispute on RCA findings and order count — ZD-98741",
+      "linked_ticket": "ZD-98741",
+      "description": "Opening a follow-up ticket to formally dispute the postmortem findings shared with us. Engineering claims 23 orders affected total across all customers. We have 47 orders in a stuck state from Contoso alone. Engineering claims root cause was a DB migration on Aug 13. Our failures started Aug 12 on international orders only. We are requesting a corrected RCA, an accurate order count, and a credit for SLA breach.",
+      "tags": ["dispute", "rca-mismatch", "sla-credit", "international-orders", "order-count-discrepancy"],
+      "sla_breach": true,
+      "customer_disputes": [
+        {
+          "dispute": "Order count mismatch",
+          "customer_claim": "47 orders stuck at Contoso alone",
+          "engineering_claim": "23 orders affected across all customers",
+          "status": "unresolved"
+        },
+        {
+          "dispute": "Incident start time",
+          "customer_claim": "Failures started Aug 12 ~14:00 EST (international orders)",
+          "engineering_claim": "Root cause event was DB migration Aug 13 23:00 UTC",
+          "status": "unresolved"
+        },
+        {
+          "dispute": "Scope of impact",
+          "customer_claim": "Only international orders affected — domestic orders fine throughout",
+          "engineering_claim": "Postmortem does not distinguish international vs domestic",
+          "status": "unresolved"
+        },
+        {
+          "dispute": "Resolution status",
+          "customer_claim": "NOT resolved — ORD-55892 and ORD-55901 still stuck",
+          "engineering_claim": "Incident marked resolved 2026-08-14T16:00Z",
+          "status": "unresolved"
+        }
+      ],
+      "comments": [
+        {
+          "author": "Margaret Peacock",
+          "timestamp": "2026-08-15T10:30:00Z",
+          "body": "I am formally disputing the RCA. Four specific mismatches listed above. We need written responses to each. Our VP has escalated to your CEO."
+        },
+        {
+          "author": "Laura Callahan",
+          "timestamp": "2026-08-15T14:00:00Z",
+          "body": "Acknowledged. I'm escalating all four disputes to engineering leadership. We will respond by EOD Aug 16."
+        },
+        {
+          "author": "Margaret Peacock",
+          "timestamp": "2026-08-19T11:00:00Z",
+          "body": "It is now Aug 19 — no response to the four disputes. ORD-55892 and ORD-55901 still stuck. International orders still intermittently failing. We are evaluating alternative vendors."
+        }
+      ]
     }
   ]
 }
