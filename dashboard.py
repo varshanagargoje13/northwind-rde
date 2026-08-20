@@ -214,14 +214,38 @@ PRIO_BADGE = {
                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Low</span>",
 }
 
+STATUS_BADGE = {
+    "Open":      "<span style='background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;"
+                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Open</span>",
+    "In Review": "<span style='background:#422006;color:#fcd34d;border:1px solid #78350f;"
+                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>In Review</span>",
+    "Done":      "<span style='background:#052e16;color:#86efac;border:1px solid #14532d;"
+                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Done</span>",
+    "Backlog":   "<span style='background:#1a0a2e;color:#c4b5fd;border:1px solid #4c1d95;"
+                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Backlog</span>",
+}
+
+# Derive recommended action from ticket state and fix_description
+_ACTIONS = {
+    "NWAPI-3341": "Verify international pool size raised to 200; close after config deploy",
+    "NWAPI-3350": "Confirm index validation added to migration checklist; no further action",
+    "NWAPI-3298": "Extend canary observation window to 24 h for future gateway upgrades",
+    "NWAPI-3362": "Assign engineer immediately; run broad PROCESSING query since 2026-08-11",
+    "ENG-3321":   "Reprioritize to High; assign and fix cache eviction under pool pressure",
+}
+
 rows = ""
 for t in jira["tickets"]:
-    badge = PRIO_BADGE.get(t["priority"], t["priority"])
+    prio_badge   = PRIO_BADGE.get(t["priority"], t["priority"])
+    status_badge = STATUS_BADGE.get(t["status"], t["status"])
+    action_text  = _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign")
     rows += f"""
-    <tr>
+    <tr style='border-top:1px solid #2d3150;'>
       <td style='padding:9px 14px;font-size:14px;font-weight:600;color:#c7d2fe;white-space:nowrap;'>{t['id']}</td>
       <td style='padding:9px 14px;font-size:14px;color:#94a3b8;'>{t['title']}</td>
-      <td style='padding:9px 14px;text-align:center;'>{badge}</td>
+      <td style='padding:9px 14px;text-align:center;'>{prio_badge}</td>
+      <td style='padding:9px 14px;text-align:center;'>{status_badge}</td>
+      <td style='padding:9px 14px;font-size:13px;color:#64748b;'>{action_text}</td>
     </tr>"""
 
 st.markdown(f"""
@@ -229,19 +253,25 @@ st.markdown(f"""
             overflow:hidden;margin-bottom:8px;'>
   <table style='width:100%;border-collapse:collapse;'>
     <thead>
-      <tr style='background:#12152a;border-bottom:1px solid #2d3150;'>
+      <tr style='background:#12152a;border-bottom:2px solid #2d3150;'>
         <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:left;width:140px;'>
+                   text-transform:uppercase;color:#c7d2fe;text-align:left;width:130px;'>
           INCIDENT_ID</th>
         <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
                    text-transform:uppercase;color:#c7d2fe;text-align:left;'>
           DESCRIPTION</th>
         <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:120px;'>
+                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:110px;'>
           PRIORITY</th>
+        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
+                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:110px;'>
+          STATUS</th>
+        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
+                   text-transform:uppercase;color:#c7d2fe;text-align:left;'>
+          ACTION</th>
       </tr>
     </thead>
-    <tbody style='divide-color:#2d3150;'>
+    <tbody>
       {rows}
     </tbody>
   </table>
