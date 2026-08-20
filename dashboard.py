@@ -203,11 +203,19 @@ for col, (icon, name, status) in zip(art_cols, artifacts_display):
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Incident table ────────────────────────────────────────────────────────────
-import pandas as pd
-
-_PRIO_ICON   = {"Critical": "🔴 Critical", "High": "🟡 High", "Medium": "🔵 Medium", "Low": "🟢 Low"}
-_STATUS_ICON = {"Open": "🔴 Open", "In Review": "🟡 In Review", "Done": "✅ Done", "Backlog": "🟣 Backlog"}
-_ACTIONS     = {
+_PRIO_PILL = {
+    "Critical": ("bg:#3d0a0a", "color:#fca5a5", "Critical"),
+    "High":     ("bg:#3d2200", "color:#fcd34d", "High"),
+    "Medium":   ("bg:#0a1a3a", "color:#93c5fd", "Medium"),
+    "Low":      ("bg:#052e16", "color:#86efac", "Low"),
+}
+_STATUS_PILL = {
+    "Open":      ("bg:#3d0a0a", "color:#fca5a5", "Open"),
+    "In Review": ("bg:#3d2200", "color:#fcd34d", "In Review"),
+    "Done":      ("bg:#052e16", "color:#86efac", "Done"),
+    "Backlog":   ("bg:#1a0a2e", "color:#c4b5fd", "Backlog"),
+}
+_ACTIONS = {
     "NWAPI-3341": "Verify international pool size raised to 200; close after config deploy",
     "NWAPI-3350": "Confirm index validation added to migration checklist; no further action",
     "NWAPI-3298": "Extend canary observation window to 24 h for future gateway upgrades",
@@ -215,28 +223,50 @@ _ACTIONS     = {
     "ENG-3321":   "Reprioritize to High; assign and fix cache eviction under pool pressure",
 }
 
-incident_rows = []
-for t in jira["tickets"]:
-    incident_rows.append({
-        "INCIDENT_ID":  t["id"],
-        "DESCRIPTION":  t["title"],
-        "PRIORITY":     _PRIO_ICON.get(t["priority"], t["priority"]),
-        "STATUS":       _STATUS_ICON.get(t["status"], t["status"]),
-        "ACTION":       _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign"),
-    })
+def _pill(bg, color, label):
+    return (
+        "<span style=\"display:inline-block;padding:2px 10px;border-radius:12px;"
+        "font-size:12px;font-weight:700;background:" + bg + ";color:" + color + ";\">"
+        + label + "</span>"
+    )
 
-st.dataframe(
-    pd.DataFrame(incident_rows),
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "INCIDENT_ID": st.column_config.TextColumn("INCIDENT_ID", width="small"),
-        "DESCRIPTION": st.column_config.TextColumn("DESCRIPTION", width="large"),
-        "PRIORITY":    st.column_config.TextColumn("PRIORITY",    width="small"),
-        "STATUS":      st.column_config.TextColumn("STATUS",      width="small"),
-        "ACTION":      st.column_config.TextColumn("ACTION",      width="large"),
-    },
+_TH = ("style=\"padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;"
+       "text-transform:uppercase;color:#c7d2fe;text-align:left;background:#12152a;"
+       "border-bottom:2px solid #2d3150;\"")
+_TD_ID = "style=\"padding:9px 14px;font-size:14px;font-weight:600;color:#c7d2fe;white-space:nowrap;border-bottom:1px solid #2d3150;\""
+_TD    = "style=\"padding:9px 14px;font-size:14px;color:#94a3b8;border-bottom:1px solid #2d3150;\""
+_TD_C  = "style=\"padding:9px 14px;text-align:center;border-bottom:1px solid #2d3150;\""
+_TD_A  = "style=\"padding:9px 14px;font-size:13px;color:#64748b;border-bottom:1px solid #2d3150;\""
+
+rows_html = ""
+for t in jira["tickets"]:
+    pb, pc, pl = _PRIO_PILL.get(t["priority"], ("bg:#1a1d2e", "color:#94a3b8", t["priority"]))
+    sb, sc, sl = _STATUS_PILL.get(t["status"],  ("bg:#1a1d2e", "color:#94a3b8", t["status"]))
+    action = _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign")
+    rows_html += (
+        "<tr>"
+        + "<td " + _TD_ID + ">" + t["id"] + "</td>"
+        + "<td " + _TD    + ">" + t["title"] + "</td>"
+        + "<td " + _TD_C  + ">" + _pill(pb, pc, pl) + "</td>"
+        + "<td " + _TD_C  + ">" + _pill(sb, sc, sl) + "</td>"
+        + "<td " + _TD_A  + ">" + action + "</td>"
+        + "</tr>"
+    )
+
+table_html = (
+    "<div style=\"background:#1a1d2e;border:1px solid #2d3150;border-radius:10px;overflow:hidden;margin-bottom:8px;\">"
+    "<table style=\"width:100%;border-collapse:collapse;\">"
+    "<thead><tr>"
+    + "<th " + _TH + ">INCIDENT_ID</th>"
+    + "<th " + _TH + ">DESCRIPTION</th>"
+    + "<th " + _TH + " style=\"text-align:center;\">PRIORITY</th>"
+    + "<th " + _TH + " style=\"text-align:center;\">STATUS</th>"
+    + "<th " + _TH + ">ACTION</th>"
+    + "</tr></thead>"
+    + "<tbody>" + rows_html + "</tbody>"
+    + "</table></div>"
 )
+st.markdown(table_html, unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
