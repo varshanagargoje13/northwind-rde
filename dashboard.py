@@ -203,70 +203,113 @@ for col, (icon, name, status) in zip(art_cols, artifacts_display):
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Incident table ────────────────────────────────────────────────────────────
-_PRIO_PILL = {
-    "Critical": ("bg:#3d0a0a", "color:#fca5a5", "Critical"),
-    "High":     ("bg:#3d2200", "color:#fcd34d", "High"),
-    "Medium":   ("bg:#0a1a3a", "color:#93c5fd", "Medium"),
-    "Low":      ("bg:#052e16", "color:#86efac", "Low"),
+_PRIO_CSS = {
+    "Critical": "background:#dc2626;color:#fff;",
+    "High":     "background:#d97706;color:#fff;",
+    "Medium":   "background:#2563eb;color:#fff;",
+    "Low":      "background:#16a34a;color:#fff;",
 }
-_STATUS_PILL = {
-    "Open":      ("bg:#3d0a0a", "color:#fca5a5", "Open"),
-    "In Review": ("bg:#3d2200", "color:#fcd34d", "In Review"),
-    "Done":      ("bg:#052e16", "color:#86efac", "Done"),
-    "Backlog":   ("bg:#1a0a2e", "color:#c4b5fd", "Backlog"),
-}
-_ACTIONS = {
-    "NWAPI-3341": "Verify international pool size raised to 200; close after config deploy",
-    "NWAPI-3350": "Confirm index validation added to migration checklist; no further action",
-    "NWAPI-3298": "Extend canary observation window to 24 h for future gateway upgrades",
-    "NWAPI-3362": "Assign engineer immediately; run broad PROCESSING query since 2026-08-11",
-    "ENG-3321":   "Reprioritize to High; assign and fix cache eviction under pool pressure",
+_STATUS_CSS = {
+    "Open":      "background:#dc2626;color:#fff;",
+    "In Review": "background:#d97706;color:#fff;",
+    "Done":      "background:#16a34a;color:#fff;",
+    "Backlog":   "background:#7c3aed;color:#fff;",
 }
 
-def _pill(bg, color, label):
-    return (
-        "<span style=\"display:inline-block;padding:2px 10px;border-radius:12px;"
-        "font-size:12px;font-weight:700;background:" + bg + ";color:" + color + ";\">"
-        + label + "</span>"
-    )
+# CSS tweaks: make Streamlit buttons smaller and coloured per variant
+st.markdown("""
+<style>
+div[data-testid="column"] button[kind="secondary"] {
+    font-size: 11px !important; padding: 3px 8px !important;
+    border-radius: 6px !important; width: 100%;
+}
+</style>
+""", unsafe_allow_html=True)
 
-_TH = ("style=\"padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;"
-       "text-transform:uppercase;color:#c7d2fe;text-align:left;background:#12152a;"
-       "border-bottom:2px solid #2d3150;\"")
-_TD_ID = "style=\"padding:9px 14px;font-size:14px;font-weight:600;color:#c7d2fe;white-space:nowrap;border-bottom:1px solid #2d3150;\""
-_TD    = "style=\"padding:9px 14px;font-size:14px;color:#94a3b8;border-bottom:1px solid #2d3150;\""
-_TD_C  = "style=\"padding:9px 14px;text-align:center;border-bottom:1px solid #2d3150;\""
-_TD_A  = "style=\"padding:9px 14px;font-size:13px;color:#64748b;border-bottom:1px solid #2d3150;\""
-
-rows_html = ""
-for t in jira["tickets"]:
-    pb, pc, pl = _PRIO_PILL.get(t["priority"], ("bg:#1a1d2e", "color:#94a3b8", t["priority"]))
-    sb, sc, sl = _STATUS_PILL.get(t["status"],  ("bg:#1a1d2e", "color:#94a3b8", t["status"]))
-    action = _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign")
-    rows_html += (
-        "<tr>"
-        + "<td " + _TD_ID + ">" + t["id"] + "</td>"
-        + "<td " + _TD    + ">" + t["title"] + "</td>"
-        + "<td " + _TD_C  + ">" + _pill(pb, pc, pl) + "</td>"
-        + "<td " + _TD_C  + ">" + _pill(sb, sc, sl) + "</td>"
-        + "<td " + _TD_A  + ">" + action + "</td>"
-        + "</tr>"
-    )
-
-table_html = (
-    "<div style=\"background:#1a1d2e;border:1px solid #2d3150;border-radius:10px;overflow:hidden;margin-bottom:8px;\">"
-    "<table style=\"width:100%;border-collapse:collapse;\">"
-    "<thead><tr>"
-    + "<th " + _TH + ">INCIDENT_ID</th>"
-    + "<th " + _TH + ">DESCRIPTION</th>"
-    + "<th " + _TH + " style=\"text-align:center;\">PRIORITY</th>"
-    + "<th " + _TH + " style=\"text-align:center;\">STATUS</th>"
-    + "<th " + _TH + ">ACTION</th>"
-    + "</tr></thead>"
-    + "<tbody>" + rows_html + "</tbody>"
-    + "</table></div>"
+# Header row
+_H = "style='padding:8px 6px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:#c7d2fe;'"
+st.markdown(
+    "<div style='background:#12152a;border:1px solid #2d3150;border-radius:10px 10px 0 0;"
+    "display:grid;grid-template-columns:110px 1fr 100px 110px 260px;"
+    "padding:0 4px;'>"
+    + "<div " + _H + ">INCIDENT_ID</div>"
+    + "<div " + _H + ">DESCRIPTION</div>"
+    + "<div " + _H + ">PRIORITY</div>"
+    + "<div " + _H + ">STATUS</div>"
+    + "<div " + _H + ">ACTION</div>"
+    + "</div>",
+    unsafe_allow_html=True,
 )
-st.markdown(table_html, unsafe_allow_html=True)
+
+# Data rows — columns for layout, real st.button() for actions
+for i, t in enumerate(jira["tickets"]):
+    row_bg = "#1a1d2e" if i % 2 == 0 else "#161929"
+    border_r = "border-radius:0 0 10px 10px;" if i == len(jira["tickets"]) - 1 else ""
+    prio_css   = _PRIO_CSS.get(t["priority"], "background:#334155;color:#fff;")
+    status_css = _STATUS_CSS.get(t["status"],  "background:#334155;color:#fff;")
+
+    pill = (
+        "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
+        "font-size:12px;font-weight:700;{css}'>{label}</span>"
+    )
+
+    c_id, c_desc, c_prio, c_stat, c_act = st.columns([1.1, 3, 1, 1.1, 2.6])
+
+    with c_id:
+        st.markdown(
+            "<div style='background:" + row_bg + ";border-left:1px solid #2d3150;"
+            "border-bottom:1px solid #2d3150;" + border_r + "padding:10px 8px;"
+            "font-size:13px;font-weight:700;color:#c7d2fe;'>" + t["id"] + "</div>",
+            unsafe_allow_html=True,
+        )
+    with c_desc:
+        st.markdown(
+            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
+            "padding:10px 8px;font-size:13px;color:#94a3b8;'>" + t["title"] + "</div>",
+            unsafe_allow_html=True,
+        )
+    with c_prio:
+        st.markdown(
+            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
+            "padding:10px 6px;text-align:center;'>"
+            "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
+            "font-size:12px;font-weight:700;" + prio_css + "'>" + t["priority"] + "</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with c_stat:
+        st.markdown(
+            "<div style='background:" + row_bg + ";border-bottom:1px solid #2d3150;"
+            "padding:10px 6px;text-align:center;'>"
+            "<span style='display:inline-block;padding:2px 9px;border-radius:10px;"
+            "font-size:12px;font-weight:700;" + status_css + "'>" + t["status"] + "</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with c_act:
+        st.markdown(
+            "<div style='background:" + row_bg + ";border-right:1px solid #2d3150;"
+            "border-bottom:1px solid #2d3150;" + border_r + "padding:6px 8px;'>",
+            unsafe_allow_html=True,
+        )
+        ba, be, br = st.columns(3)
+        if ba.button("✓ Approve", key=f"approve_{t['id']}",  use_container_width=True):
+            _entry = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                      "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
+                      "original": t["status"], "override": "approved", "comment": ""}
+            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_entry) + "\n")
+            st.toast(f"{t['id']} approved", icon="✅")
+        if be.button("✎ Edit",    key=f"edit_{t['id']}",    use_container_width=True):
+            st.toast(f"Edit {t['id']} — open Jira ticket to update", icon="✎")
+        if br.button("✗ Reject",  key=f"reject_{t['id']}",  use_container_width=True):
+            _entry = {"timestamp": datetime.now(timezone.utc).isoformat(),
+                      "dri": "dashboard", "item_type": "incident", "item_id": t["id"],
+                      "original": t["status"], "override": "rejected", "comment": ""}
+            with open(OUT_DIR / "override_log.jsonl", "a", encoding="utf-8") as _f:
+                _f.write(json.dumps(_entry) + "\n")
+            st.toast(f"{t['id']} rejected", icon="❌")
+        st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
