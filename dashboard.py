@@ -203,30 +203,11 @@ for col, (icon, name, status) in zip(art_cols, artifacts_display):
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ── Incident table ────────────────────────────────────────────────────────────
-PRIO_BADGE = {
-    "Critical": "<span style='background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;"
-                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Critical</span>",
-    "High":     "<span style='background:#422006;color:#fcd34d;border:1px solid #78350f;"
-                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>High</span>",
-    "Medium":   "<span style='background:#0c1a3a;color:#93c5fd;border:1px solid #1e3a5f;"
-                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Medium</span>",
-    "Low":      "<span style='background:#052e16;color:#86efac;border:1px solid #14532d;"
-                "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Low</span>",
-}
+import pandas as pd
 
-STATUS_BADGE = {
-    "Open":      "<span style='background:#450a0a;color:#fca5a5;border:1px solid #7f1d1d;"
-                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Open</span>",
-    "In Review": "<span style='background:#422006;color:#fcd34d;border:1px solid #78350f;"
-                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>In Review</span>",
-    "Done":      "<span style='background:#052e16;color:#86efac;border:1px solid #14532d;"
-                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Done</span>",
-    "Backlog":   "<span style='background:#1a0a2e;color:#c4b5fd;border:1px solid #4c1d95;"
-                 "border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;'>Backlog</span>",
-}
-
-# Derive recommended action from ticket state and fix_description
-_ACTIONS = {
+_PRIO_ICON   = {"Critical": "🔴 Critical", "High": "🟡 High", "Medium": "🔵 Medium", "Low": "🟢 Low"}
+_STATUS_ICON = {"Open": "🔴 Open", "In Review": "🟡 In Review", "Done": "✅ Done", "Backlog": "🟣 Backlog"}
+_ACTIONS     = {
     "NWAPI-3341": "Verify international pool size raised to 200; close after config deploy",
     "NWAPI-3350": "Confirm index validation added to migration checklist; no further action",
     "NWAPI-3298": "Extend canary observation window to 24 h for future gateway upgrades",
@@ -234,49 +215,28 @@ _ACTIONS = {
     "ENG-3321":   "Reprioritize to High; assign and fix cache eviction under pool pressure",
 }
 
-rows = ""
+incident_rows = []
 for t in jira["tickets"]:
-    prio_badge   = PRIO_BADGE.get(t["priority"], t["priority"])
-    status_badge = STATUS_BADGE.get(t["status"], t["status"])
-    action_text  = _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign")
-    rows += f"""
-    <tr style='border-top:1px solid #2d3150;'>
-      <td style='padding:9px 14px;font-size:14px;font-weight:600;color:#c7d2fe;white-space:nowrap;'>{t['id']}</td>
-      <td style='padding:9px 14px;font-size:14px;color:#94a3b8;'>{t['title']}</td>
-      <td style='padding:9px 14px;text-align:center;'>{prio_badge}</td>
-      <td style='padding:9px 14px;text-align:center;'>{status_badge}</td>
-      <td style='padding:9px 14px;font-size:13px;color:#64748b;'>{action_text}</td>
-    </tr>"""
+    incident_rows.append({
+        "INCIDENT_ID":  t["id"],
+        "DESCRIPTION":  t["title"],
+        "PRIORITY":     _PRIO_ICON.get(t["priority"], t["priority"]),
+        "STATUS":       _STATUS_ICON.get(t["status"], t["status"]),
+        "ACTION":       _ACTIONS.get(t["id"], t.get("fix_description") or "Review and assign"),
+    })
 
-st.markdown(f"""
-<div style='background:#1a1d2e;border:1px solid #2d3150;border-radius:10px;
-            overflow:hidden;margin-bottom:8px;'>
-  <table style='width:100%;border-collapse:collapse;'>
-    <thead>
-      <tr style='background:#12152a;border-bottom:2px solid #2d3150;'>
-        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:left;width:130px;'>
-          INCIDENT_ID</th>
-        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:left;'>
-          DESCRIPTION</th>
-        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:110px;'>
-          PRIORITY</th>
-        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:center;width:110px;'>
-          STATUS</th>
-        <th style='padding:10px 14px;font-size:13px;font-weight:700;letter-spacing:.06em;
-                   text-transform:uppercase;color:#c7d2fe;text-align:left;'>
-          ACTION</th>
-      </tr>
-    </thead>
-    <tbody>
-      {rows}
-    </tbody>
-  </table>
-</div>
-""", unsafe_allow_html=True)
+st.dataframe(
+    pd.DataFrame(incident_rows),
+    use_container_width=True,
+    hide_index=True,
+    column_config={
+        "INCIDENT_ID": st.column_config.TextColumn("INCIDENT_ID", width="small"),
+        "DESCRIPTION": st.column_config.TextColumn("DESCRIPTION", width="large"),
+        "PRIORITY":    st.column_config.TextColumn("PRIORITY",    width="small"),
+        "STATUS":      st.column_config.TextColumn("STATUS",      width="small"),
+        "ACTION":      st.column_config.TextColumn("ACTION",      width="large"),
+    },
+)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
