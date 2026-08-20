@@ -68,6 +68,25 @@
       "fix_description": null,
       "fix_deployed": null,
       "linked_issues": ["NWAPI-3341", "NWAPI-3350"]
+    },
+    {
+      "id": "ENG-3321",
+      "type": "Task",
+      "priority": "Medium",
+      "status": "Backlog",
+      "title": "Cache invalidation review — deferred, medium",
+      "reporter": "Janet Leverling",
+      "assignee": "Unassigned",
+      "created": "2026-07-15T11:00:00Z",
+      "updated": "2026-08-01T09:00:00Z",
+      "description": "Known cache invalidation edge case in order status query layer. When the connection pool is under pressure, stale cache entries for order state are not evicted correctly. Identified in load testing July 2026. Deprioritized as medium risk at the time — this is now considered a contributing factor to the Aug 2026 incident.",
+      "root_cause_hypothesis": "Stale cache entries not evicted under connection pool pressure",
+      "estimated_orders_impacted": "unknown — not investigated before incident",
+      "fix_description": null,
+      "fix_deployed": null,
+      "deferred_reason": "Medium priority — backlogged before Aug 2026 incident. Known issue that was deprioritized.",
+      "smoking_gun_note": "The smoking gun: known issue deprioritized",
+      "linked_issues": ["NWAPI-3341", "NWAPI-3362"]
     }
   ]
 }
