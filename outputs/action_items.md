@@ -41,7 +41,7 @@
 
 ### 6. Add index validation to migration pre-flight checklist
 - **Owner:** Steven Buchanan — Due: 2026-08-23
-- **Sources:** [Postmortem] [Eng Status]
+- **Sources:** [Postmortem] [Executive Email]
 
 ### 7. Require manual approval gate for production DB migrations
 - **Owner:** Andrew Fuller — Due: 2026-08-23
@@ -57,7 +57,7 @@
 
 ### 9. Add monitoring alert for invalid DB indexes
 - **Owner:** Janet Leverling — Due: 2026-08-28
-- **Sources:** [Postmortem] [Eng Status]
+- **Sources:** [Postmortem] [Executive Email]
 
 ### 10. Add pre-migration dry-run environment
 - **Owner:** Andrew Fuller — Due: 2026-09-06
@@ -83,11 +83,11 @@
 
 The following items were generated specifically because of cross-artifact conflicts:
 
-- **Timeline — Incident Start** conflict: Sources disagree on when the incident began by 53 hours. Earliest: Slack (2026-08-11 18:00 UTC); Latest: Eng Status (202...
+- **Timeline — Incident Start** conflict: Sources disagree on when the incident began by 53 hours. Earliest: Slack (2026-08-11 18:00 UTC); Latest: Postmortem (202...
 - **Resolution Status** conflict: Engineering and Postmortem declare the incident RESOLVED, but Zendesk, Slack, Account Summary, and Telemetry show the is...
 - **Impact — Orders Affected** conflict: Sources report between 23 and 60 affected orders — a spread of 37. The true count is unresolved....
 - **Impact — Revenue at Risk** conflict: Revenue-at-risk estimates vary significantly: $85,000 (Postmortem) vs $200,000 (Account Summary / Zendesk)....
 
 ---
 
-*Actions derived from: Zendesk ZD-98741, Slack #incident-order-processing, Postmortem INC-2026-0812, Telemetry, Account Summary ACC-00441, Jira Sprint 47, Eng Status 2026-08-14.*
+*Actions derived from: Zendesk ZD-98741, Slack #incident-order-processing, Postmortem INC-2026-0812, Telemetry, Account Summary ACC-00441, Jira Sprint 47, Executive Email 2026-08-14.*

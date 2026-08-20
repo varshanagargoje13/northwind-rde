@@ -17,7 +17,7 @@ def generate_executive_summary(artifacts: list[dict], conflicts: list[Conflict])
     account = next(a for a in artifacts if a["source"] == "Account Summary")
     postmortem = next(a for a in artifacts if a["source"] == "Postmortem")
     telemetry = next(a for a in artifacts if a["source"] == "Telemetry")
-    eng = next(a for a in artifacts if a["source"] == "Eng Status")
+    email_art = next((a for a in artifacts if a["source"] == "Executive Email"), {})
     jira = next(a for a in artifacts if a["source"] == "Jira")
     slack = next(a for a in artifacts if a["source"] == "Slack")
 
@@ -43,7 +43,7 @@ def generate_executive_summary(artifacts: list[dict], conflicts: list[Conflict])
         f"has been engaged {_cite('Account Summary')}.",
         "",
         "Engineering declared the incident **RESOLVED** on 2026-08-14 at 16:00 UTC "
-        f"{_cite('Eng Status')} {_cite('Postmortem')}, but the customer is still actively "
+        f"{_cite('Executive Email')} {_cite('Postmortem')}, but the customer is still actively "
         f"reporting failures as of today {_cite('Zendesk')}, live telemetry shows a degraded "
         f"error rate of {telemetry['current_error_rate_pct']}% against a 0.2% baseline "
         f"{_cite('Telemetry')}, and Jira ticket NWAPI-3362 for stuck orders is **Open and Unassigned** "
@@ -59,9 +59,9 @@ def generate_executive_summary(artifacts: list[dict], conflicts: list[Conflict])
         f"| 2026-08-11 17:28 UTC | API Gateway v2.4.1 deployed | {_cite('Jira')} |",
         f"| 2026-08-12 14:00 UTC | SEV-1 declared; error rate hit 34% | {_cite('Slack')} {_cite('Telemetry')} |",
         f"| 2026-08-12 14:07 UTC | Zendesk ticket ZD-98741 opened by Contoso | {_cite('Zendesk')} |",
-        f"| 2026-08-13 23:00 UTC | DB migration script ran in production | {_cite('Postmortem')} {_cite('Eng Status')} |",
+        f"| 2026-08-13 23:00 UTC | DB migration script ran in production | {_cite('Postmortem')} {_cite('Executive Email')} |",
         f"| 2026-08-14 01:00 UTC | Error rate spiked to 41-52% (second wave) | {_cite('Telemetry')} |",
-        f"| 2026-08-14 16:00 UTC | Engineering declared resolution | {_cite('Eng Status')} |",
+        f"| 2026-08-14 16:00 UTC | Engineering declared resolution | {_cite('Executive Email')} |",
         f"| 2026-08-19 09:22 UTC | Customer still reporting failures on specific orders | {_cite('Zendesk')} |",
         "",
         "---",
@@ -86,7 +86,7 @@ def generate_executive_summary(artifacts: list[dict], conflicts: list[Conflict])
         f"1. **API Gateway v2.4.1 connection leak** — connection pool exhausted under load "
         f"{_cite('Slack')} {_cite('Jira/NWAPI-3341')}",
         f"2. **DB migration script (migrate_orders_v12.sql)** — caused invalid index on `orders.status_idx`, "
-        f"driving query latency to 8,000ms+ {_cite('Postmortem')} {_cite('Eng Status')} {_cite('Jira/NWAPI-3350')}",
+        f"driving query latency to 8,000ms+ {_cite('Postmortem')} {_cite('Executive Email')} {_cite('Jira/NWAPI-3350')}",
         f"3. **Residual stuck orders** — cleanup job did not recover all affected orders after mitigation "
         f"{_cite('Jira/NWAPI-3362')} {_cite('Zendesk')}",
         "",
@@ -121,7 +121,7 @@ def generate_executive_summary(artifacts: list[dict], conflicts: list[Conflict])
         "",
         f"*This summary was synthesized from 7 sources: Zendesk ZD-98741, Slack #incident-order-processing, "
         f"Postmortem INC-2026-0812, Production Telemetry, Account Summary ACC-00441, Jira NWAPI sprint 47, "
-        f"and Eng Status Update (2026-08-14).*",
+        f"and Executive Email Update (2026-08-14).*",
     ]
 
     return "\n".join(lines)
@@ -241,7 +241,7 @@ def generate_action_items(artifacts: list[dict], conflicts: list[Conflict]) -> s
         "",
         f"### 6. Add index validation to migration pre-flight checklist",
         f"- **Owner:** Steven Buchanan — Due: 2026-08-23",
-        f"- **Sources:** {_cite('Postmortem')} {_cite('Eng Status')}",
+        f"- **Sources:** {_cite('Postmortem')} {_cite('Executive Email')}",
         "",
         f"### 7. Require manual approval gate for production DB migrations",
         f"- **Owner:** Andrew Fuller — Due: 2026-08-23",
@@ -257,7 +257,7 @@ def generate_action_items(artifacts: list[dict], conflicts: list[Conflict]) -> s
         "",
         f"### 9. Add monitoring alert for invalid DB indexes",
         f"- **Owner:** Janet Leverling — Due: 2026-08-28",
-        f"- **Sources:** {_cite('Postmortem')} {_cite('Eng Status')}",
+        f"- **Sources:** {_cite('Postmortem')} {_cite('Executive Email')}",
         "",
         f"### 10. Add pre-migration dry-run environment",
         f"- **Owner:** Andrew Fuller — Due: 2026-09-06",
@@ -294,7 +294,7 @@ def generate_action_items(artifacts: list[dict], conflicts: list[Conflict]) -> s
         "---",
         "",
         f"*Actions derived from: Zendesk ZD-98741, Slack #incident-order-processing, "
-        f"Postmortem INC-2026-0812, Telemetry, Account Summary ACC-00441, Jira Sprint 47, Eng Status 2026-08-14.*",
+        f"Postmortem INC-2026-0812, Telemetry, Account Summary ACC-00441, Jira Sprint 47, Executive Email 2026-08-14.*",
     ]
 
     return "\n".join(lines)

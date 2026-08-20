@@ -18,7 +18,7 @@ def load_zendesk(path: Path) -> dict:
         "status": raw["status"],
         "priority": raw["priority"],
         "reported_at": _parse_iso(raw["created_at"]),
-        "incident_start_claim": _parse_iso("2026-08-12T14:00:00Z"),  # "since Tuesday Aug 12 at 2pm"
+        "incident_start_claim": _parse_iso("2026-08-12T14:00:00Z"),
         "orders_affected_claim": 47,
         "root_cause_claim": "recent infrastructure change (unspecified)",
         "resolution_status": "open — customer still reporting issues as of 2026-08-19",
@@ -36,8 +36,8 @@ def load_slack(path: Path) -> dict:
     return {
         "source": "Slack",
         "channel": raw["channel"],
-        "incident_start_claim": _parse_iso("2026-08-11T18:00:00Z"),  # "first noticed 6pm Monday"
-        "orders_affected_claim": 60,  # "60+ orders affected"
+        "incident_start_claim": _parse_iso("2026-08-11T18:00:00Z"),
+        "orders_affected_claim": 60,
         "root_cause_claim": "API gateway v2.4.1 connection leak (per janet.leverling & steven.buchanan)",
         "resolution_status": "mitigated — but Contoso still reporting issues 2026-08-19",
         "key_contributors": list({m["user"] for m in messages}),
@@ -85,7 +85,6 @@ def load_telemetry(path: Path) -> dict:
     mitigation_time = _parse_iso(metrics["mitigation_time"])
     peak_error_rate = max(e["error_rate_pct"] for e in timeline)
 
-    # Check if currently degraded
     recent = [e for e in timeline if _parse_iso(e["timestamp"]) >= _parse_iso("2026-08-19T00:00:00Z")]
     current_error_rate = recent[-1]["error_rate_pct"] if recent else None
 
@@ -155,17 +154,38 @@ def load_jira(path: Path) -> dict:
     }
 
 
-def load_eng_status(path: Path) -> dict:
+def load_executive_email(path: Path) -> dict:
     text = path.read_text(encoding="utf-8")
+
+    # Parse headers
+    sender_match = re.search(r"From:\s*(.+)", text)
+    subject_match = re.search(r"Subject:\s*(.+)", text)
+    date_match = re.search(r"Date:\s*(.+)", text)
+    cc_match = re.search(r"CC:\s*(.+)", text)
+
+    orders_match = re.search(r"(\d+) orders? are stuck", text)
+    revenue_match = re.search(r"\$([0-9,]+),000", text)
+
     return {
-        "source": "Eng Status",
-        "declared_status": "RESOLVED",
-        "resolution_time_claim": _parse_iso("2026-08-14T16:00:00Z"),
-        "incident_start_claim": _parse_iso("2026-08-13T23:00:00Z"),
-        "orders_affected_claim": 23,
-        "root_cause_claim": "DB migration script caused invalid index; connection pool exhaustion",
-        "resolution_status": "resolved — engineering has closed this incident",
-        "preventive_actions": 4,
+        "source": "Executive Email",
+        "sender": sender_match.group(1).strip() if sender_match else "Unknown",
+        "subject": subject_match.group(1).strip() if subject_match else "",
+        "date": date_match.group(1).strip() if date_match else "",
+        "cc": cc_match.group(1).strip() if cc_match else "",
+        "incident_start_claim": _parse_iso("2026-08-12T13:00:00Z"),
+        "orders_affected_claim": int(orders_match.group(1)) if orders_match else 47,
+        "revenue_at_risk_usd": 200000,
+        "root_cause_claim": "not provided — customer demands specifics",
+        "resolution_status": "open — VP + CEO escalated, renewal at risk, competitor evaluation begun",
+        "tone": "urgent / threatening",
+        "renewal_threat": True,
+        "executive_requests": [
+            "Bridge call today 2pm EST",
+            "Written RCA by EOD",
+            "Resolution timeline with named owners",
+            "Confirmation all 47 orders remediated",
+            "Explanation of 3 escalations in 2 weeks",
+        ],
         "raw_text": text,
     }
 
@@ -178,7 +198,7 @@ def load_all(data_dir: Path) -> list[dict]:
         (data_dir / "telemetry.json", load_telemetry),
         (data_dir / "account_summary.json", load_account_summary),
         (data_dir / "jira_tickets.json", load_jira),
-        (data_dir / "eng_status.md", load_eng_status),
+        (data_dir / "executive_email.md", load_executive_email),
     ]
     artifacts = []
     for path, loader in loaders:
