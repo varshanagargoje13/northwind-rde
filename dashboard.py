@@ -6,11 +6,15 @@ Run: streamlit run dashboard.py
 
 import json
 import re
-from datetime import datetime
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import plotly.graph_objects as go
 import streamlit as st
+
+# allow importing src package from dashboard.py at repo root
+sys.path.insert(0, str(Path(__file__).parent))
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -44,7 +48,41 @@ def load_override_log():
     lines = log_path.read_text(encoding="utf-8").strip().splitlines()
     return [json.loads(l) for l in lines if l.strip()]
 
+
+@st.cache_data
+def load_conflicts_and_actions():
+    """Run rule-based conflict detection and return conflicts + default actions."""
+    from src.loaders import load_all
+    from src.conflict_detector import detect_all
+    artifacts = load_all(DATA_DIR)
+    conflicts = detect_all(artifacts)
+    conflict_dicts = [
+        {"category": c.category, "severity": c.severity,
+         "sources": c.sources, "description": c.description,
+         "details": c.details}
+        for c in conflicts
+    ]
+    actions = [
+        {"priority": "P0", "title": "Fix stuck orders ORD-55892, ORD-55901",
+         "sources": ["Zendesk", "Jira", "Slack"]},
+        {"priority": "P0", "title": "Send executive update to Derek Hartley",
+         "sources": ["Executive Email", "Account Summary"]},
+        {"priority": "P0", "title": "Audit all customers for stuck orders",
+         "sources": ["Postmortem", "Slack", "Account Summary"]},
+        {"priority": "P1", "title": "Reconcile true order impact count",
+         "sources": ["Postmortem", "Zendesk", "Slack", "Jira", "Telemetry"]},
+        {"priority": "P1", "title": "Resolve root cause timeline discrepancy",
+         "sources": ["Slack", "Postmortem", "Jira", "Telemetry"]},
+        {"priority": "P2", "title": "Implement DB connection pool circuit breaker",
+         "sources": ["Postmortem", "Jira"]},
+        {"priority": "P3", "title": "Schedule emergency QBR with Contoso",
+         "sources": ["Account Summary", "Executive Email"]},
+    ]
+    return conflict_dicts, actions
+
+
 override_log = load_override_log()
+live_conflicts, live_actions = load_conflicts_and_actions()
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -326,6 +364,185 @@ with col_rec:
     </div>
     </div>
     """, unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DRI REVIEW PANEL
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("### DRI Review — Human-in-the-Loop")
+st.caption("[HUMAN] Review synthesized conflicts and action items, then submit your decisions to the audit trail.")
+
+# initialise session state buckets
+if "dri_submitted" not in st.session_state:
+    st.session_state.dri_submitted = False
+if "dri_log" not in st.session_state:
+    st.session_state.dri_log = []
+
+SEV_COLOR = {"HIGH": "#ef4444", "MEDIUM": "#f59e0b", "LOW": "#22c55e"}
+PRIO_COLOR = {"P0": "#fca5a5", "P1": "#fcd34d", "P2": "#93c5fd", "P3": "#c4b5fd"}
+
+dri_col, review_col = st.columns([1, 3])
+
+with dri_col:
+    st.markdown("""
+    <div class='card'>
+    <div class='card-title'>DRI Identity</div>
+    </div>
+    """, unsafe_allow_html=True)
+    dri_name = st.text_input("Your Name", placeholder="e.g. Laura Callahan", key="dri_name")
+    dri_role = st.selectbox("Role", ["CSM", "TAM", "Eng Lead", "VP Engineering", "VP Support", "Other"], key="dri_role")
+    dri_custom_role = ""
+    if dri_role == "Other":
+        dri_custom_role = st.text_input("Specify role", key="dri_custom_role")
+    effective_role = dri_custom_role if dri_role == "Other" else dri_role
+
+    st.markdown("""
+    <div class='card' style='margin-top:12px;'>
+    <div class='card-title'>Workflow Step</div>
+    <div style='font-size:11px;color:#94a3b8;line-height:1.9;'>
+        <span style='color:#22c55e;'>✓</span> Agent ingests 7 artifacts<br>
+        <span style='color:#22c55e;'>✓</span> Conflict detection<br>
+        <span style='color:#f59e0b;'>→</span> <b style='color:#e2e8f0;'>DRI review (you are here)</b><br>
+        <span style='color:#475569;'>○</span> Comms generated<br>
+        <span style='color:#475569;'>○</span> DRI approves &amp; sends
+    </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+with review_col:
+    with st.expander("Conflict Review", expanded=True):
+        conflict_decisions = {}
+        conflict_comments  = {}
+        for i, c in enumerate(live_conflicts):
+            sev   = c["severity"]
+            cat   = c["category"]
+            desc  = c["description"]
+            srcs  = ", ".join(c.get("sources", []))
+            color = SEV_COLOR.get(sev, "#94a3b8")
+
+            st.markdown(f"""
+            <div style='border-left:4px solid {color};padding:8px 12px;
+                        background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
+                <span style='font-size:10px;font-weight:700;color:{color};
+                             text-transform:uppercase;letter-spacing:.06em;'>{sev}</span>
+                &nbsp;·&nbsp;
+                <span style='font-size:13px;font-weight:600;color:#e2e8f0;'>{cat}</span><br>
+                <span style='font-size:11px;color:#94a3b8;'>{desc}</span><br>
+                <span style='font-size:10px;color:#475569;'>Sources: {srcs}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            d_col, c_col = st.columns([1, 2])
+            with d_col:
+                decision = st.radio(
+                    "Decision",
+                    ["Approve", "Reject", "Escalate"],
+                    horizontal=True,
+                    key=f"cf_decision_{i}",
+                    label_visibility="collapsed",
+                )
+            with c_col:
+                comment = st.text_input("Comment (optional)", key=f"cf_comment_{i}",
+                                        placeholder="Add context or override reason…",
+                                        label_visibility="collapsed")
+            conflict_decisions[i] = decision
+            conflict_comments[i]  = comment
+            st.markdown("---")
+
+    with st.expander("Action Item Review", expanded=True):
+        action_decisions = {}
+        action_comments  = {}
+        for i, a in enumerate(live_actions):
+            prio  = a["priority"]
+            title = a["title"]
+            srcs  = ", ".join(a.get("sources", []))
+            color = PRIO_COLOR.get(prio, "#94a3b8")
+
+            st.markdown(f"""
+            <div style='border-left:4px solid {color};padding:8px 12px;
+                        background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
+                <span style='font-size:10px;font-weight:700;color:{color};'>{prio}</span>
+                &nbsp;·&nbsp;
+                <span style='font-size:13px;font-weight:600;color:#e2e8f0;'>{title}</span><br>
+                <span style='font-size:10px;color:#475569;'>Sources: {srcs}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            d_col, c_col = st.columns([1, 2])
+            with d_col:
+                decision = st.radio(
+                    "Decision",
+                    ["Include", "Remove"],
+                    horizontal=True,
+                    key=f"ac_decision_{i}",
+                    label_visibility="collapsed",
+                )
+            with c_col:
+                comment = st.text_input("Comment (optional)", key=f"ac_comment_{i}",
+                                        placeholder="Reassign owner, change priority…",
+                                        label_visibility="collapsed")
+            action_decisions[i] = decision
+            action_comments[i]  = comment
+            st.markdown("---")
+
+    submit_col, status_col = st.columns([1, 3])
+    with submit_col:
+        submit_review = st.button("Submit Review", type="primary",
+                                  use_container_width=True, key="submit_dri")
+    with status_col:
+        if not dri_name:
+            st.warning("Enter your name above before submitting.")
+
+    if submit_review:
+        if not dri_name.strip():
+            st.error("DRI name is required.")
+        else:
+            log_path = OUT_DIR / "override_log.jsonl"
+            log_path.parent.mkdir(exist_ok=True)
+            ts = datetime.now(timezone.utc).isoformat()
+            entries = []
+
+            for i, c in enumerate(live_conflicts):
+                entry = {
+                    "timestamp": ts,
+                    "dri": f"{dri_name} ({effective_role})",
+                    "item_type": "conflict",
+                    "item_id": c["category"],
+                    "original": f"severity={c['severity']}, sources={','.join(c.get('sources',[]))}",
+                    "override": conflict_decisions[i].lower(),
+                    "comment": conflict_comments[i],
+                }
+                entries.append(entry)
+
+            for i, a in enumerate(live_actions):
+                entry = {
+                    "timestamp": ts,
+                    "dri": f"{dri_name} ({effective_role})",
+                    "item_type": "action",
+                    "item_id": a["title"][:50],
+                    "original": f"priority={a['priority']}, sources={','.join(a.get('sources',[]))}",
+                    "override": action_decisions[i].lower(),
+                    "comment": action_comments[i],
+                }
+                entries.append(entry)
+
+            with open(log_path, "a", encoding="utf-8") as f:
+                for e in entries:
+                    f.write(json.dumps(e) + "\n")
+
+            approved_cf = sum(1 for d in conflict_decisions.values() if d == "Approve")
+            rejected_cf = sum(1 for d in conflict_decisions.values() if d == "Reject")
+            escalated_cf = sum(1 for d in conflict_decisions.values() if d == "Escalate")
+            included_ac = sum(1 for d in action_decisions.values() if d == "Include")
+            removed_ac  = sum(1 for d in action_decisions.values() if d == "Remove")
+
+            st.session_state.dri_submitted = True
+            st.session_state.dri_log = entries
+            st.success(
+                f"Review submitted by **{dri_name}** ({effective_role}) at {ts[:19]} UTC.  \n"
+                f"Conflicts: {approved_cf} approved · {rejected_cf} rejected · {escalated_cf} escalated  \n"
+                f"Actions: {included_ac} included · {removed_ac} removed  \n"
+                f"Logged to `outputs/override_log.jsonl`"
+            )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ACCOUNT HEALTH + HITL
