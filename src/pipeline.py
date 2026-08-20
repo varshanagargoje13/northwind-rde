@@ -24,6 +24,7 @@ from .report_generator import (
     generate_executive_summary,
     generate_conflict_report,
     generate_action_items,
+    generate_customer_email,
 )
 from .human_in_loop import build_confidence_signals, dri_review
 
@@ -84,10 +85,12 @@ def run() -> None:
             print(f"  Rule-based detected {len(rule_conflicts)} conflicts (cross-check)")
             conflicts = ai_conflicts
             actions   = ai_actions
+            customer_email_md = generate_customer_email(artifacts, ai_conflicts)
             outputs   = [
                 ("executive_summary.md", exec_md),
                 ("conflict_report.md",   conflict_md),
                 ("action_items.md",      actions_md),
+                ("customer_email.md",    customer_email_md),
             ]
         except Exception as e:
             print(f"  {YELLOW}[WARN] AI synthesis failed: {e}{RESET}")
@@ -131,13 +134,15 @@ def run() -> None:
                 print(f"           {d.strip()}")
             print()
 
-        exec_md     = generate_executive_summary(artifacts, conflicts)
-        conflict_md = generate_conflict_report(artifacts, conflicts)
-        actions_md  = generate_action_items(artifacts, conflicts)
+        exec_md           = generate_executive_summary(artifacts, conflicts)
+        conflict_md       = generate_conflict_report(artifacts, conflicts)
+        actions_md        = generate_action_items(artifacts, conflicts)
+        customer_email_md = generate_customer_email(artifacts, conflicts)
         outputs = [
             ("executive_summary.md", exec_md),
             ("conflict_report.md",   conflict_md),
             ("action_items.md",      actions_md),
+            ("customer_email.md",    customer_email_md),
         ]
 
     # ── Step 3: HITL confidence review ────────────────────────────────────────
@@ -155,7 +160,7 @@ def run() -> None:
     t3 = time.perf_counter()
 
     # ── Step 4: Write output reports ───────────────────────────────────────────
-    _section("Step 4 -- Writing 3 output reports")
+    _section("Step 4 -- Writing 4 output reports")
     OUT_DIR.mkdir(exist_ok=True)
     for filename, content in outputs:
         path = OUT_DIR / filename

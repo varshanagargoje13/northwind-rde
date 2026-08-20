@@ -193,6 +193,141 @@ def generate_conflict_report(artifacts: list[dict], conflicts: list) -> str:
     return "\n".join(lines)
 
 
+def generate_customer_email(artifacts: list[dict], conflicts: list) -> str:
+    """Non-technical customer-facing email — <2 min read, plain language, no jargon."""
+    account   = next(a for a in artifacts if a["source"] == "Account Summary")
+    zendesk   = next(a for a in artifacts if a["source"] == "Zendesk")
+    telemetry = next(a for a in artifacts if a["source"] == "Telemetry")
+    jira      = next(a for a in artifacts if a["source"] == "Jira")
+    email_art = next((a for a in artifacts if a["source"] == "Executive Email"), {})
+
+    csm       = account.get("csm", "Laura Callahan")
+    tam       = account.get("tam", account.get("technical_account_manager", "Robert King"))
+    company   = account["customer"]
+    renewal   = account["renewal_date"]
+    err_rate  = telemetry.get("current_error_rate_pct", "1.4")
+    stuck_ord = ", ".join(jira.get("known_affected_orders", ["ORD-55892", "ORD-55901"]))
+
+    high_conflicts = [c for c in conflicts if _f(c, "severity") == "HIGH"]
+
+    lines = [
+        "# Customer Update Email — INC-2026-0812",
+        f"**Generated:** {NOW}  ",
+        f"**Report type:** Customer-facing (non-technical, <2 min read)  ",
+        "",
+        "---",
+        "",
+        "```",
+        f"To:      Derek Hartley <d.hartley@contoso-ltd.com>",
+        f"CC:      Margaret Peacock <m.peacock@contoso-ltd.com>; {csm} (CSM)",
+        f"From:    {csm} — Northwind Enterprise Support",
+        f"Date:    {NOW}",
+        f"Subject: [UPDATE] Order Processing — {company} / INC-2026-0812",
+        "```",
+        "",
+        "---",
+        "",
+        f"Hi Derek,",
+        "",
+        f"Thank you for your continued patience on the order processing issue affecting {company}. "
+        f"Here is a concise update — we will keep it brief and jargon-free.",
+        "",
+        "---",
+        "",
+        "## What We Are Seeing",
+        "",
+        f"Intermittent failures on **international order submissions** since Aug 12. "
+        f"Domestic orders are unaffected throughout. "
+        f"Two specific orders ({stuck_ord}) are still stuck and are our immediate priority. "
+        f"Our systems currently show a {err_rate}% error rate on international order routes "
+        f"(normal baseline is below 0.2%). {_cite('Telemetry')} {_cite('Zendesk')}",
+        "",
+        "---",
+        "",
+        "## What We Have Already Changed",
+        "",
+        "- Deployed a connection fix on Aug 14 — this reduced the error rate from a peak of 52% "
+        f"down to {err_rate}% {_cite('Telemetry')}",
+        "- Identified that **only international orders** are affected — domestic routing was never impacted "
+        f"{_cite('Zendesk')} {_cite('Slack')}",
+        f"- Opened a dedicated engineering ticket (NWAPI-3362) to resolve the two remaining stuck orders "
+        f"{_cite('Jira')}",
+        "",
+        "---",
+        "",
+        "## What We Think Is Most Likely",
+        "",
+        "Two contributing factors:",
+        "",
+        "1. **International routing used a smaller capacity setting** — our international order pool was "
+        "configured at one-quarter of the capacity used for domestic orders. Under load, it exhausted "
+        f"first and caused timeouts. {_cite('Slack')} {_cite('Telemetry')}",
+        "2. **A maintenance script run on Aug 13** made the situation worse by introducing a data "
+        f"lookup slowdown affecting stuck orders. {_cite('Postmortem')}",
+        "",
+        "We also have a known configuration gap under review (ENG-3321) that may have allowed "
+        f"stale values to persist for international patterns. {_cite('Jira')}",
+        "",
+    ]
+
+    if high_conflicts:
+        lines += [
+            "---",
+            "",
+            "## What We Are Still Reconciling",
+            "",
+            "We want to be transparent — we found discrepancies between our internal reports "
+            "that we are resolving before sending you a final corrected RCA:",
+            "",
+        ]
+        for c in high_conflicts:
+            lines.append(f"- **{_f(c, 'category')}:** {_f(c, 'description')[:120]}")
+        lines.append("")
+
+    lines += [
+        "---",
+        "",
+        "## What We Are Doing Next",
+        "",
+        f"| # | Action | Owner | By When |",
+        f"|---|---|---|---|",
+        f"| 1 | Resolve stuck orders {stuck_ord} | Being assigned today | Today |",
+        f"| 2 | Audit all enterprise accounts for any other stuck orders | Eng Lead | Today |",
+        f"| 3 | Send you a corrected RCA with accurate order count | {csm} (CSM) | EOD {NOW} |",
+        f"| 4 | Increase international routing capacity to match domestic | Engineering | This week |",
+        "",
+        "---",
+        "",
+        "## Next Update",
+        "",
+        f"We will send a written confirmation by **EOD {NOW}** with:",
+        f"- Named owner for stuck order resolution",
+        f"- Confirmed count of all affected orders (correcting the 23 vs. 47 discrepancy)",
+        f"- Updated timeline",
+        "",
+        "We are also available for a **bridge call today** — please reply with a preferred time "
+        "and we will arrange it immediately.",
+        "",
+        "---",
+        "",
+        "We sincerely apologise for the impact this has had on your supply chain operations "
+        f"and for the delay since our last update on 2026-08-13. Resolving this for {company} "
+        "is our top priority.",
+        "",
+        f"Warm regards,  ",
+        f"**{csm}** (Customer Success Manager)  ",
+        f"**{tam}** (Technical Account Manager)  ",
+        "Northwind Enterprise Support",
+        "",
+        "---",
+        "",
+        f"*Synthesized from: Zendesk ZD-98741, ZD-99788 · Slack #incident-order-processing · "
+        f"Postmortem INC-2026-0812 · Telemetry · Account Summary ACC-00441 · "
+        f"Jira NWAPI-3362 · Executive Email (Derek Hartley, 2026-08-13).*",
+    ]
+    return "\n".join(lines)
+
+
 def generate_action_items(artifacts: list[dict], conflicts: list) -> str:
     account = next(a for a in artifacts if a["source"] == "Account Summary")
     jira    = next(a for a in artifacts if a["source"] == "Jira")
