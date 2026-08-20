@@ -98,32 +98,32 @@ p, li { color: #94a3b8; }
     border-radius: 10px; padding: 16px; margin-bottom: 12px;
 }
 .card-title {
-    font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.06em;
     text-transform: uppercase; color: #c7d2fe; margin-bottom: 12px;
 }
 
 /* KPI */
 .kpi-wrap { border-radius: 10px; padding: 16px; border: 1px solid #2d3150; }
-.kpi-before { font-size: 11px; color: #ef4444; text-decoration: line-through; margin-bottom: 4px; }
-.kpi-val { font-size: 28px; font-weight: 800; color: #fff; line-height: 1; }
-.kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px; }
-.kpi-sub { font-size: 11px; margin-top: 5px; }
+.kpi-before { font-size: 13px; color: #ef4444; text-decoration: line-through; margin-bottom: 4px; }
+.kpi-val { font-size: 30px; font-weight: 800; color: #fff; line-height: 1; }
+.kpi-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 6px; }
+.kpi-sub { font-size: 13px; margin-top: 5px; }
 
 /* Conflict */
 .conflict-high { background: #1c0a0a; border-left: 4px solid #ef4444; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
 .conflict-medium { background: #1c1200; border-left: 4px solid #f59e0b; border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; }
-.conflict-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
-.conflict-desc { font-size: 11px; color: #94a3b8; margin-top: 3px; line-height: 1.5; }
-.conflict-src { font-size: 10px; color: #64748b; margin-top: 4px; }
+.conflict-title { font-size: 15px; font-weight: 600; color: #e2e8f0; }
+.conflict-desc { font-size: 13px; color: #94a3b8; margin-top: 3px; line-height: 1.5; }
+.conflict-src { font-size: 12px; color: #64748b; margin-top: 4px; }
 
 /* Recommendation */
 .rec-card { background: #12152a; border: 1px solid #2d3150; border-radius: 6px; padding: 10px 12px; margin-bottom: 7px; }
-.rec-title { font-size: 13px; font-weight: 600; color: #e2e8f0; }
-.rec-why { font-size: 11px; color: #94a3b8; margin-top: 3px; }
-.rec-src { font-size: 10px; color: #3b82f6; margin-top: 3px; }
+.rec-title { font-size: 15px; font-weight: 600; color: #e2e8f0; }
+.rec-why { font-size: 13px; color: #94a3b8; margin-top: 3px; }
+.rec-src { font-size: 12px; color: #3b82f6; margin-top: 3px; }
 
 /* Badge */
-.badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 9px; border-radius: 20px; margin: 2px; }
+.badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 9px; border-radius: 20px; margin: 2px; }
 .badge-red    { background: #450a0a; color: #fca5a5; border: 1px solid #7f1d1d; }
 .badge-yellow { background: #422006; color: #fcd34d; border: 1px solid #78350f; }
 .badge-green  { background: #052e16; color: #86efac; border: 1px solid #14532d; }
@@ -135,22 +135,22 @@ p, li { color: #94a3b8; }
 
 /* Artifact */
 .artifact-box { background: #12152a; border: 1px solid #2d3150; border-radius: 8px; padding: 12px; text-align: center; }
-.artifact-icon { font-size: 22px; margin-bottom: 5px; }
-.artifact-name { font-size: 11px; font-weight: 600; color: #c7d2fe; }
-.artifact-status { font-size: 10px; margin-top: 3px; }
+.artifact-icon { font-size: 24px; margin-bottom: 5px; }
+.artifact-name { font-size: 13px; font-weight: 600; color: #c7d2fe; }
+.artifact-status { font-size: 12px; margin-top: 3px; }
 
 /* Audit */
-.audit-row { font-size: 10px; font-family: monospace; padding: 5px 8px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid; }
+.audit-row { font-size: 12px; font-family: monospace; padding: 5px 8px; border-radius: 4px; margin-bottom: 4px; border-left: 3px solid; }
 .audit-high   { background: #0a1a0a; border-color: #22c55e; color: #86efac; }
 .audit-medium { background: #1a1200; border-color: #f59e0b; color: #fcd34d; }
 
 /* BA */
 .ba-before { background: #1c0a0a; border: 1px solid #7f1d1d; border-radius: 8px; padding: 14px; }
 .ba-after  { background: #052e16; border: 1px solid #14532d; border-radius: 8px; padding: 14px; }
-.ba-label  { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.ba-label  { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
 .ba-before .ba-label { color: #ef4444; }
 .ba-after  .ba-label { color: #22c55e; }
-.ba-text { font-size: 12px; line-height: 1.7; color: #94a3b8; }
+.ba-text { font-size: 14px; line-height: 1.7; color: #94a3b8; }
 
 hr-custom { border: none; border-top: 1px solid #2d3150; margin: 8px 0; }
 </style>
@@ -368,8 +368,8 @@ with col_rec:
 # ─────────────────────────────────────────────────────────────────────────────
 # DRI REVIEW PANEL
 # ─────────────────────────────────────────────────────────────────────────────
-st.markdown("### DRI Review — Human-in-the-Loop")
-st.caption("[HUMAN] Review synthesized conflicts and action items, then submit your decisions to the audit trail.")
+st.markdown("### DRI Reviewp")
+st.caption("Review synthesized conflicts and action items, then submit your decisions to the audit trail.")
 
 # initialise session state buckets
 if "dri_submitted" not in st.session_state:
@@ -398,7 +398,7 @@ with dri_col:
     st.markdown("""
     <div class='card' style='margin-top:12px;'>
     <div class='card-title'>Workflow Step</div>
-    <div style='font-size:11px;color:#94a3b8;line-height:1.9;'>
+    <div style='font-size:13px;color:#94a3b8;line-height:1.9;'>
         <span style='color:#22c55e;'>✓</span> Agent ingests 7 artifacts<br>
         <span style='color:#22c55e;'>✓</span> Conflict detection<br>
         <span style='color:#f59e0b;'>→</span> <b style='color:#e2e8f0;'>DRI review (you are here)</b><br>
@@ -422,12 +422,12 @@ with review_col:
             st.markdown(f"""
             <div style='border-left:4px solid {color};padding:8px 12px;
                         background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
-                <span style='font-size:10px;font-weight:700;color:{color};
+                <span style='font-size:12px;font-weight:700;color:{color};
                              text-transform:uppercase;letter-spacing:.06em;'>{sev}</span>
                 &nbsp;·&nbsp;
-                <span style='font-size:13px;font-weight:600;color:#e2e8f0;'>{cat}</span><br>
-                <span style='font-size:11px;color:#94a3b8;'>{desc}</span><br>
-                <span style='font-size:10px;color:#475569;'>Sources: {srcs}</span>
+                <span style='font-size:15px;font-weight:600;color:#e2e8f0;'>{cat}</span><br>
+                <span style='font-size:13px;color:#94a3b8;'>{desc}</span><br>
+                <span style='font-size:12px;color:#475569;'>Sources: {srcs}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -460,10 +460,10 @@ with review_col:
             st.markdown(f"""
             <div style='border-left:4px solid {color};padding:8px 12px;
                         background:#12152a;border-radius:0 6px 6px 0;margin-bottom:4px;'>
-                <span style='font-size:10px;font-weight:700;color:{color};'>{prio}</span>
+                <span style='font-size:12px;font-weight:700;color:{color};'>{prio}</span>
                 &nbsp;·&nbsp;
-                <span style='font-size:13px;font-weight:600;color:#e2e8f0;'>{title}</span><br>
-                <span style='font-size:10px;color:#475569;'>Sources: {srcs}</span>
+                <span style='font-size:15px;font-weight:600;color:#e2e8f0;'>{title}</span><br>
+                <span style='font-size:12px;color:#475569;'>Sources: {srcs}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -561,7 +561,7 @@ with col_acc:
     st.markdown(f"""
     <div class='card'>
     <div class='card-title'>Account — {account['company_name']}</div>
-    <div style='font-size:12px;color:#94a3b8;line-height:1.9;'>
+    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
         <b style='color:#e2e8f0;'>Contract:</b> ${account['contract_value_usd_annual']:,}/year &nbsp;·&nbsp;
         <b style='color:#e2e8f0;'>Renewal:</b> {account['renewal_date']}<br>
         <b style='color:#e2e8f0;'>Exec contact:</b> Derek Hartley (VP Procurement)<br>
@@ -595,7 +595,7 @@ with col_hitl:
         override = entry["override"]
         audit_html += f"<div class='audit-row {css}'>{entry['item_type']} · {item_id} · {conf} {score} · {override}</div>"
     if len(override_log) > 7:
-        audit_html += f"<div style='font-size:10px;color:#475569;margin-top:5px;'>+ {len(override_log)-7} more entries</div>"
+        audit_html += f"<div style='font-size:12px;color:#475569;margin-top:5px;'>+ {len(override_log)-7} more entries</div>"
     audit_html += "</div>"
     st.markdown(audit_html, unsafe_allow_html=True)
 
@@ -664,7 +664,7 @@ with ec2:
     st.markdown(f"""
     <div class='card'>
     <div class='card-title'>Customer Summary &lt;2 min</div>
-    <div style='font-size:12px;color:#94a3b8;line-height:1.9;'>
+    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
         <b style='color:#e2e8f0;'>What we're seeing:</b><br>
         Intermittent failures on international orders only. Domestic unaffected.<br><br>
         <b style='color:#e2e8f0;'>What we've already changed:</b><br>
@@ -679,7 +679,7 @@ with ec2:
     </div>
     <div class='card'>
     <div class='card-title'>Recipient Context</div>
-    <div style='font-size:12px;color:#94a3b8;line-height:1.9;'>
+    <div style='font-size:14px;color:#94a3b8;line-height:1.9;'>
         <b style='color:#e2e8f0;'>To:</b> Derek Hartley (VP Procurement)<br>
         <b style='color:#e2e8f0;'>CC:</b> Margaret Peacock (Ops), CSM<br>
         <b style='color:#e2e8f0;'>Tone:</b> Urgent · Exec-level · Non-technical<br>
@@ -699,7 +699,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ─────────────────────────────────────────────────────────────────────────────
 st.divider()
 st.markdown(
-    "<div style='text-align:center;font-size:11px;color:#475569;'>"
+    "<div style='text-align:center;font-size:13px;color:#475569;'>"
     "Northwind Escalation Synthesizer &nbsp;·&nbsp; "
     "Sources: Zendesk · Slack · Postmortem · Telemetry · Account Summary · Jira · Executive Email &nbsp;·&nbsp; "
     "Powered by Claude claude-opus-5"
