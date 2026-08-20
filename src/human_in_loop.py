@@ -126,6 +126,12 @@ def dri_review(
     print(f"\n  {BOLD}{CYAN}-- Human-in-the-Loop (HITL) Review {'─' * 25}{RESET}\n")
     print(f"  {DIM}DRI reviews synthesized output before comms are sent.{RESET}\n")
 
+    # Always initialise the audit log file so it appears in outputs/ after every run
+    OVERRIDE_LOG.parent.mkdir(exist_ok=True)
+    if not OVERRIDE_LOG.exists():
+        with open(OVERRIDE_LOG, "w", encoding="utf-8") as f:
+            f.write("")  # touch — entries appended below if any LOW-confidence items found
+
     uncertain_items: list[dict] = []
     approved_count  = 0
 
